@@ -1,0 +1,763 @@
+<title>Fretwork</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one working column (max 1080px); sticky tab bar; Today = time picker then a timed checklist; Songs = five stage columns. */
+:root{
+  --bg:#F3F5F2; --surface:#FFFFFF; --sunk:#E9EDE8; --ink:#1B2220; --muted:#5C6964; --line:#D6DDD8;
+  --accent:#2C6A5C; --accent-soft:#DCEBE6; --on-accent:#FFFFFF;
+  --brass:#9A6F22; --brass-soft:#F3E8D2; --good:#2D7A4C; --good-soft:#DDEFE3; --warn:#B0502A; --warn-soft:#F6E2D8;
+  --slate:#51607A; --slate-soft:#E2E7F0;
+  --f-display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111614; --surface:#19201D; --sunk:#202825; --ink:#E6ECE9; --muted:#97A49F; --line:#2D3632;
+  --accent:#62B6A1; --accent-soft:#1F3631; --on-accent:#0D1714;
+  --brass:#D5AA5A; --brass-soft:#352B19; --good:#6CC08C; --good-soft:#1C3325; --warn:#E58A62; --warn-soft:#3A2419;
+  --slate:#9CAACB; --slate-soft:#232A39; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111614; --surface:#19201D; --sunk:#202825; --ink:#E6ECE9; --muted:#97A49F; --line:#2D3632;
+  --accent:#62B6A1; --accent-soft:#1F3631; --on-accent:#0D1714;
+  --brass:#D5AA5A; --brass-soft:#352B19; --good:#6CC08C; --good-soft:#1C3325; --warn:#E58A62; --warn-soft:#3A2419;
+  --slate:#9CAACB; --slate-soft:#232A39; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:1080px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 64px}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.topin{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding-block:12px}
+.brand{font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:-.01em;display:flex;align-items:center;gap:10px}
+.brand svg{flex:none}
+nav.tabs{display:flex;gap:4px;flex-wrap:wrap}
+nav.tabs button{font:500 14px var(--f-body);background:none;border:0;color:var(--muted);padding:7px 12px;border-radius:999px;cursor:pointer}
+nav.tabs button[aria-current="page"]{background:var(--ink);color:var(--bg)}
+nav.tabs button:hover:not([aria-current="page"]){background:var(--sunk);color:var(--ink)}
+.spacer{flex:1}
+.status{font:12px var(--f-mono);color:var(--muted)}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:34px;font-weight:700;line-height:1.1}
+h2{font-size:21px;font-weight:700}
+h3{font-size:16px;font-weight:600;font-family:var(--f-body)}
+.eyebrow{font:500 11px var(--f-body);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.muted{color:var(--muted)}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+section.view{padding-top:28px;display:flex;flex-direction:column;gap:24px}
+button{font-family:var(--f-body)}
+.btn{font:500 14px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 14px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.ghost{background:none;border-color:transparent;color:var(--muted)}
+.btn.ghost:hover{color:var(--ink);background:var(--sunk)}
+.btn.small{padding:4px 10px;font-size:13px}
+.btn.danger{color:var(--warn)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+textarea{width:100%;resize:vertical;min-height:90px;line-height:1.5}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+.chip{display:inline-flex;align-items:center;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--sunk);color:var(--muted);white-space:nowrap}
+.chip.focus{background:var(--brass-soft);color:var(--brass)}
+.chips{display:flex;gap:5px;flex-wrap:wrap}
+.banner{padding:10px 14px;border-radius:8px;background:var(--brass-soft);color:var(--ink);font-size:14px}
+.empty{padding:28px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:var(--r)}
+
+/* Today: time picker */
+.picker{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:24px;align-items:start}
+@media (max-width:760px){.picker{grid-template-columns:1fr}}
+.times{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:18px}
+.time{border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:16px 14px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:2px;color:var(--ink)}
+.time:hover{border-color:var(--accent);background:var(--accent-soft)}
+.time b{font:600 28px var(--f-mono);letter-spacing:-.02em}
+.time span{font-size:12px;color:var(--muted)}
+.custom{display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap}
+.custom input{width:90px}
+.glance{display:flex;flex-direction:column;gap:14px}
+.kv{display:flex;justify-content:space-between;gap:12px;font-size:14px;border-bottom:1px solid var(--line);padding-bottom:8px}
+.kv:last-child{border-bottom:0;padding-bottom:0}
+
+/* Today: session */
+.sesshead{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.meter{height:8px;background:var(--sunk);border-radius:99px;overflow:hidden;min-width:220px;flex:1;max-width:360px}
+.meter i{display:block;height:100%;background:var(--accent);border-radius:99px}
+.items{display:flex;flex-direction:column;gap:10px}
+.item{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px}
+@media (max-width:600px){.item{grid-template-columns:1fr}}
+.item.running{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.item.done{background:var(--sunk);border-color:transparent}
+.blk{display:flex;flex-direction:column;gap:4px}
+.blk .lbl{font:600 11px var(--f-body);letter-spacing:.08em;text-transform:uppercase}
+.blk .mins{font:500 22px var(--f-mono)}
+.b-warmup .lbl{color:var(--slate)} .b-stretch .lbl{color:var(--brass)} .b-polish .lbl{color:var(--accent)}
+.b-weak .lbl{color:var(--warn)} .b-maint .lbl{color:var(--muted)} .b-harvest .lbl{color:var(--good)}
+.ititle{font-weight:600;font-size:16px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.ititle a{color:inherit;text-decoration:none;border-bottom:1px solid var(--line);cursor:pointer}
+.ititle a:hover{border-color:var(--ink)}
+.task{color:var(--ink);opacity:.85;margin:4px 0 10px;max-width:70ch}
+.lesson{font-size:13px;background:var(--brass-soft);color:var(--ink);padding:6px 10px;border-radius:6px;margin-bottom:10px}
+.ctrl{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.timer{font:500 15px var(--f-mono);min-width:96px}
+.bpm{width:76px}
+.amins{width:64px}
+.clean{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.clean button{border:0;background:var(--surface);color:var(--muted);width:30px;height:32px;cursor:pointer;font:500 13px var(--f-mono);border-left:1px solid var(--line)}
+.clean button:first-child{border-left:0}
+.clean button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+.logged{font-size:13px;color:var(--muted)}
+
+/* Board */
+.board{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:12px;overflow-x:auto;padding-bottom:8px}
+.col{display:flex;flex-direction:column;gap:8px;min-width:0}
+.colhead{padding:4px 2px 8px;border-bottom:2px solid var(--line)}
+.colhead h3{display:flex;justify-content:space-between}
+.colhead p{margin:2px 0 0;font-size:12px;color:var(--muted)}
+.st-learning .colhead{border-color:var(--slate)} .st-stitching .colhead{border-color:var(--brass)}
+.st-tempo .colhead{border-color:var(--accent)} .st-ready .colhead{border-color:var(--good)} .st-maintenance .colhead{border-color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:8px;cursor:pointer;text-align:left;color:var(--ink);font:inherit}
+.card:hover{border-color:var(--muted)}
+.card .t{font-weight:600;line-height:1.3}
+.card .a{font-size:13px;color:var(--muted)}
+.bpmbar{display:flex;align-items:center;gap:8px;font:12px var(--f-mono);color:var(--muted)}
+.bpmbar .track{flex:1;height:5px;background:var(--sunk);border-radius:9px;overflow:hidden}
+.bpmbar .track i{display:block;height:100%;background:var(--accent)}
+.moves{display:flex;justify-content:space-between}
+.moves button{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:6px;font-size:12px;padding:2px 8px;cursor:pointer}
+.moves button:hover{color:var(--ink);border-color:var(--muted)}
+.moves button:disabled{visibility:hidden}
+
+/* Discover */
+.tiers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+@media (max-width:860px){.tiers{grid-template-columns:1fr}}
+.sug{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:8px}
+.sug p{margin:0;font-size:14px}
+.sug .ideas{font-size:13px;color:var(--muted)}
+.sug .verify{font-size:12px;color:var(--warn)}
+
+/* Progress */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@media (max-width:760px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.kpi b{display:block;font:500 28px var(--f-mono);letter-spacing:-.02em;margin-top:4px}
+.kpi span{font-size:12px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media (max-width:860px){.grid2{grid-template-columns:1fr}}
+.sbars{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.sbar{display:grid;grid-template-columns:130px minmax(0,1fr) 54px;gap:10px;align-items:center;font-size:13px}
+.sbar .track{position:relative;height:12px;background:var(--sunk);border-radius:4px}
+.sbar .track i{position:absolute;left:0;top:0;bottom:0;background:var(--accent);border-radius:4px}
+.sbar .track i.low{background:var(--warn)}
+.sbar .track u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);opacity:.55}
+.chart svg{width:100%;height:auto;display:block}
+.chart text{fill:var(--muted);font:11px var(--f-mono)}
+.skilllist{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.skilllist .r{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:14px;padding:6px 0;border-bottom:1px solid var(--line)}
+
+/* Dialog */
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);padding:0;width:min(720px,calc(100vw - 32px));max-height:calc(100vh - 48px)}
+dialog::backdrop{background:rgba(10,14,12,.45)}
+.dlg{padding:22px;display:flex;flex-direction:column;gap:16px}
+.dlg .fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:560px){.dlg .fields{grid-template-columns:1fr}}
+.skilltoggles{display:flex;gap:6px;flex-wrap:wrap}
+.skilltoggles button{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:999px;padding:4px 10px;font-size:13px;cursor:pointer}
+.skilltoggles button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.notes textarea{min-height:180px;font-size:14px}
+.toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:8px;font-size:14px;z-index:20}
+@media (prefers-reduced-motion:no-preference){.item,.card{transition:border-color .15s,box-shadow .15s}}
+</style>
+
+<header class="top"><div class="wrap topin">
+  <div class="brand"><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><rect x="1" y="3" width="24" height="20" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 3v20M17 3v20" stroke="currentColor" stroke-width="1.2" opacity=".5"/><path d="M1 9h24M1 14h24M1 19h24" stroke="currentColor" stroke-width="1"/><circle cx="13" cy="11.5" r="2.2" fill="var(--accent)"/></svg>Fretwork</div>
+  <nav class="tabs" aria-label="Sections">
+    <button data-tab="today">Today</button><button data-tab="songs">Songs</button><button data-tab="discover">Discover</button><button data-tab="progress">Progress</button>
+  </nav>
+  <div class="spacer"></div>
+  <div class="status" id="status">Connecting…</div>
+</div></header>
+<main class="wrap" id="main"></main>
+<dialog id="dlg"></dialog>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+/* ---------- constants ---------- */
+const STAGES=[
+  {k:'learning',l:'Learning',hint:'Every section playable slowly'},
+  {k:'stitching',l:'Stitching',hint:'Crossing the joins between sections'},
+  {k:'tempo',l:'Up to tempo',hint:'Clean at ~90% of record speed'},
+  {k:'ready',l:'Performance-ready',hint:'Next: a clean take to a click in Logic'},
+  {k:'maintenance',l:'Maintenance',hint:'Spaced review keeps it alive'}];
+const STAGE_L=Object.fromEntries(STAGES.map(s=>[s.k,s.l]));
+const BLOCKS=[
+  {k:'warmup',l:'Warm-up',share:.10,min:5},
+  {k:'stretch',l:'Stretch',share:.25,min:10},
+  {k:'polish',l:'Polish',share:.25,min:10},
+  {k:'weak',l:'Skill focus',share:.20,min:8},
+  {k:'maint',l:'Maintenance',share:.10,min:5},
+  {k:'harvest',l:'Idea harvest',share:.10,min:5}];
+const BLOCK_L=Object.fromEntries(BLOCKS.map(b=>[b.k,b.l]));
+const DROP_ORDER=['harvest','maint','warmup','stretch','weak','polish'];
+const SKILL_CUES={
+  rhythm:'keep the strumming hand moving evenly and lock to the click',
+  ear:'before checking the tab, try to work out the next phrase by ear',
+  melody_chords:'make the melody notes ring out over the chords under them',
+  fingerstyle:'keep the thumb steady; the bass never stops',
+  fretboard:'name each chord root and find it in one other place on the neck',
+  lead:'check every bend lands in pitch and every note sustains',
+  timing:'put the metronome on beats 2 and 4 only'};
+const HARVEST=[
+  t=>`Take the rhythm feel of ${t} and play it over a chord progression of your own, in a different key. Loop 8 bars.`,
+  t=>`Pick one chord voicing or shape from ${t}. Move it to three other spots on the neck and build a 4-bar progression from them.`,
+  t=>`Play the chords of ${t} and hum a new melody over them. Find that melody on the guitar.`,
+  t=>`Change one thing in a ${t} riff (the rhythm, one note, or the key) until it sounds like yours.`];
+
+/* ---------- helpers ---------- */
+const $=(s,r=document)=>r.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const localDate=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const today=()=>localDate(new Date());
+const daysBetween=(a,b)=>Math.round((new Date(b+'T12:00')-new Date(a+'T12:00'))/864e5);
+const daysSince=d=>d?daysBetween(d,today()):999;
+const addDays=(d,n)=>{const x=new Date(d+'T12:00');x.setDate(x.getDate()+n);return localDate(x)};
+const slug=s=>String(s).toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,60)||('x'+Date.now().toString(36));
+const fmtMin=m=>{m=Math.round(m);return m>=60?Math.floor(m/60)+'h '+String(m%60).padStart(2,'0')+'m':m+'m'};
+const fmtClock=s=>{s=Math.max(0,Math.round(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
+const clone=o=>JSON.parse(JSON.stringify(o));
+function toast(msg){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2600)}
+
+/* ---------- state ---------- */
+const S={db:null,ready:false,offline:false,tab:'today',songs:[],drills:[],skills:[],suggestions:[],sessions:[],profile:{dailyGoal:90},
+  session:null,running:null,pendingRender:false,bpmSong:null,confirmDel:null};
+try{const t=localStorage.getItem('fw_tab');if(t)S.tab=t}catch(e){}
+
+/* ---------- persistence ---------- */
+const writeQ={};
+function save(path,data,mode='set'){
+  if(!S.db)return Promise.resolve();
+  const prev=writeQ[path]||Promise.resolve();
+  const p=prev.then(()=>S.db.doc(path)[mode](data)).catch(e=>{console.warn(e);toast('Not saved: '+(e&&e.code||'error'))});
+  writeQ[path]=p;return p;
+}
+function del(path){if(!S.db)return Promise.resolve();const prev=writeQ[path]||Promise.resolve();const p=prev.then(()=>S.db.doc(path).delete()).catch(e=>console.warn(e));writeQ[path]=p;return p}
+let sessT;
+function saveSession(now){clearTimeout(sessT);const f=()=>{const s=S.session;if(!s)return;const {id,...body}=clone(s);save('sessions/'+id,body)};if(now)f();else sessT=setTimeout(f,1200)}
+function patchSong(id,patch){const s=S.songs.find(x=>x.id===id);if(s)Object.assign(s,patch);return save('songs/'+id,patch,'update')}
+function patchDrill(id,patch){const s=S.drills.find(x=>x.id===id);if(s)Object.assign(s,patch);return save('drills/'+id,patch,'update')}
+
+async function initDb(){
+  const t=setTimeout(()=>{if(!S.ready){S.offline=true;setStatus();render()}},10000);
+  let db=null;
+  try{db=window.claude&&window.claude.use?await window.claude.use('db'):null}catch(e){db=null}
+  if(!db){clearTimeout(t);S.offline=true;S.ready=true;setStatus();render();return}
+  S.db=db;
+  let pending=new Set(['songs','drills','skills','suggestions','sessions']);
+  const onData=(key,fresh)=>{if(fresh&&pending.delete(key)&&pending.size===0){S.ready=true;S.offline=false;clearTimeout(t);setStatus()}scheduleRender()};
+  const onErr=e=>{clearTimeout(t);S.offline=true;S.ready=true;setStatus();console.warn(e);scheduleRender()};
+  for(const c of ['songs','drills','skills','suggestions']){
+    db.collection(c).onSnapshot(snap=>{S[c]=snap.docs.map(d=>({id:d.id,...clone(d.data())}));onData(c,!snap.metadata.fromCache)},onErr);
+  }
+  db.collection('sessions').orderBy('startedAt','desc').limit(500).onSnapshot(snap=>{
+    S.sessions=snap.docs.map(d=>({id:d.id,...clone(d.data())}));
+    if(!S.session){const a=S.sessions.find(s=>s.status==='active'&&s.date===today());if(a)S.session=clone(a)}
+    onData('sessions',!snap.metadata.fromCache)},onErr);
+  db.doc('config/profile').onSnapshot(s=>{if(s.exists)S.profile={...S.profile,...clone(s.data())};scheduleRender()},()=>{});
+}
+function setStatus(){$('#status').textContent=S.offline?(S.db?'Offline: changes may not save':'Not saving: open on claude.ai, signed in'):'Saved to your account'}
+
+/* ---------- rendering control ---------- */
+function scheduleRender(){
+  const a=document.activeElement;
+  if(a&&$('#main').contains(a)&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)){S.pendingRender=true;return}
+  render();
+}
+document.addEventListener('focusout',()=>{setTimeout(()=>{if(S.pendingRender){S.pendingRender=false;scheduleRender()}},0)});
+
+/* ---------- analytics ---------- */
+function allSessions(){
+  const list=S.sessions.filter(s=>!S.session||s.id!==S.session.id);
+  if(S.session)list.push(S.session);
+  return list;
+}
+const itemMins=it=>it.done?(it.actualMinutes??it.minutes??0):0;
+function skillMinutes(days){
+  const from=addDays(today(),-(days-1));const m={};S.skills.forEach(s=>m[s.id]=0);
+  for(const ses of allSessions()){if(ses.date<from)continue;
+    for(const it of ses.items||[]){const mins=itemMins(it);const sk=(it.skills||[]).filter(k=>k in m);if(!mins||!sk.length)continue;sk.forEach(k=>m[k]+=mins/sk.length)}}
+  return m;
+}
+function minutesByDate(){const m={};for(const ses of allSessions()){for(const it of ses.items||[])m[ses.date]=(m[ses.date]||0)+itemMins(it)}return m}
+function songMinutes(id){let t=0;for(const ses of allSessions())for(const it of ses.items||[])if(it.refId===id)t+=itemMins(it);return t}
+function rankedSkills(){
+  const m=skillMinutes(28);
+  const r=s=>((m[s.id]||0)+1)/(s.focus?1.3:1)+Math.random()*.01;
+  return [...S.skills].sort((a,b)=>r(a)-r(b));
+}
+function recentMain(){
+  // songs that were a main focus (12+ min) on each of the last two days
+  const y=addDays(today(),-1),y2=addDays(today(),-2);const per={};
+  for(const ses of allSessions()){if(ses.date!==y&&ses.date!==y2)continue;
+    for(const it of ses.items||[]){if(it.kind!=='song')continue;const k=it.refId+'|'+ses.date;per[k]=(per[k]||0)+itemMins(it)}}
+  const out=new Set();for(const s of S.songs){if((per[s.id+'|'+y]||0)>=12&&(per[s.id+'|'+y2]||0)>=12)out.add(s.id)}
+  return out;
+}
+function streak(){
+  const m=minutesByDate();let d=today();if(!m[d])d=addDays(d,-1);let n=0;
+  while(m[d]>0){n++;d=addDays(d,-1)}return n;
+}
+
+/* ---------- planner ---------- */
+function allocate(T,avail,shares){
+  const sh=b=>shares?(shares[b.k]||0):b.share;
+  let active=BLOCKS.filter(b=>avail.has(b.k)&&sh(b)>0);let changed=true;
+  if(!active.length||T<=0)return [];
+  while(changed){changed=false;const tot=active.reduce((s,b)=>s+sh(b),0);
+    for(const k of DROP_ORDER){const b=active.find(x=>x.k===k);if(!b||active.length<=1)continue;
+      if(sh(b)/tot*T<b.min){active=active.filter(x=>x!==b);changed=true;break}}}
+  const tot=active.reduce((s,b)=>s+sh(b),0);
+  return active.map(b=>({...b,mins:sh(b)/tot*T}));
+}
+// What earlier sessions today already covered (minutes per block, items done)
+function todayDone(excludeId){
+  const blocks={},refs=new Set();let total=0,count=0;
+  for(const ses of allSessions()){if(ses.date!==today()||ses.id===excludeId)continue;
+    let any=false;
+    for(const it of ses.items||[]){const m=itemMins(it);if(!m)continue;any=true;blocks[it.block]=(blocks[it.block]||0)+m;total+=m;if(it.refId&&it.kind!=='prompt')refs.add(it.refId)}
+    if(any)count++}
+  return {blocks,total,refs,count};
+}
+// Plan this session so that the whole day stays balanced
+function dayAwareAlloc(T,avail,td){
+  if(td.total<10)return allocate(T,avail);
+  const warm=avail.has('warmup')&&T>=30?5:0;          // every session gets a short warm-up
+  const rest=T-warm;const dayAvail=new Set([...avail].filter(k=>k!=='warmup'));
+  const dayTotal=td.total-(td.blocks.warmup||0)+rest;
+  const ideal=allocate(dayTotal,dayAvail);const need={};let sum=0;
+  for(const b of ideal){need[b.k]=Math.max(0,b.mins-(td.blocks[b.k]||0));sum+=need[b.k]}
+  let alloc=allocate(rest,dayAvail,sum>0?need:null);
+  if(!alloc.length)alloc=allocate(rest,dayAvail);
+  if(warm)alloc.push({...BLOCKS[0],mins:warm});
+  const ord=k=>BLOCKS.findIndex(b=>b.k===k);
+  return alloc.sort((a,b)=>ord(a.k)-ord(b.k));
+}
+function lessonActive(x){return x.lessonUntil&&x.lessonUntil>=today()}
+function songTask(s){
+  const cb=s.currentBpm,tb=s.targetBpm;
+  switch(s.stage){
+    case 'learning':return (Math.random()<.5)
+      ?'Learn the next new section at a tempo where every note is clean. Finish by playing it joined to the section before it.'
+      :'Backward chaining: learn or review the last section first, then add the one before it. The ending should be the part you know best.';
+    case 'stitching':return 'Find the weakest join between two sections. Loop only those 2 bars (end of one, start of the next) until you get 5 clean reps in a row, then play both full sections together once.'+(cb?` Work at ${cb} BPM.`:'');
+    case 'tempo':return cb?`Metronome ladder: start at ${Math.max(40,cb-6)} BPM and go up 2–4 BPM after 3 clean reps. Back off when it gets sloppy. Finish with one full run-through at ${cb} BPM without stopping.${tb?` Target: ${tb} BPM.`:''}`
+      :'Metronome ladder: find a tempo where it is clean, go up 2–4 BPM after 3 clean reps, back off when sloppy. Log your fastest clean BPM. Finish with one non-stop run-through.';
+    case 'ready':return 'Performance mode: one full run-through without stopping, then record a take to a click in Logic. If the take is clean, move this song to Maintenance.';
+    default:return 'One run-through in performance mode. Do not stop for mistakes. Rate how clean it was.';
+  }
+}
+function songItem(s,extra={}){return {kind:'song',refId:s.id,title:s.title,sub:s.artist||'',skills:s.skills||[],task:songTask(s),lessonNote:lessonActive(s)?s.lessonNote:'',hasBpm:['stitching','tempo','ready','maintenance'].includes(s.stage)||!!s.targetBpm,...extra}}
+function drillItem(d,extra={}){return {kind:'drill',refId:d.id,title:d.title,sub:'Drill',skills:d.skills||[],task:d.task||'',lessonNote:lessonActive(d)?d.lessonNote:'',hasBpm:true,...extra}}
+function buildPlan(T){
+  const songs=S.songs.filter(s=>!s.archived);const main=recentMain();const used=new Set();
+  const td=todayDone(S.session&&S.session.id);
+  const j=()=>Math.random()*2;
+  const score=s=>Math.min(daysSince(s.lastPracticed),14)+(lessonActive(s)?8:0)+j()-(main.has(s.id)?20:0)-(td.refs.has(s.id)?10:0);
+  const polishPool=songs.filter(s=>['stitching','tempo','ready'].includes(s.stage));
+  const maintPool=songs.filter(s=>s.stage==='maintenance');
+  const avail=new Set(['stretch','weak']);
+  if(polishPool.length)avail.add('polish');
+  if(maintPool.length)avail.add('maint');
+  if(S.drills.some(d=>d.warmup))avail.add('warmup');
+  if(songs.some(s=>s.stage!=='learning'))avail.add('harvest');
+  const alloc=dayAwareAlloc(T,avail,td);const items=[];
+  for(const b of alloc){
+    const n=Math.max(1,Math.round(b.mins/12));let picks=[];
+    if(b.k==='warmup'){
+      picks=S.drills.filter(d=>d.warmup&&!used.has(d.id)).sort((a,c)=>daysSince(c.lastDone)+j()-daysSince(a.lastDone)).slice(0,n).map(d=>drillItem(d));
+    } else if(b.k==='stretch'){
+      picks=songs.filter(s=>s.stage==='learning'&&!used.has(s.id)).sort((a,c)=>score(c)-score(a)).slice(0,n).map(s=>songItem(s));
+      if(picks.length<n)picks.push({kind:'prompt',refId:null,title:'Start something new',sub:'From Discover',skills:[],task:'Open Discover and add a song to Learning. Then learn its first 4 bars slowly, or its last 4 bars so the ending gets the most reps.',hasBpm:false,link:'discover'});
+    } else if(b.k==='polish'){
+      picks=polishPool.filter(s=>!used.has(s.id)).sort((a,c)=>(score(c)+(c.stage==='tempo'?1:0))-(score(a)+(a.stage==='tempo'?1:0))).slice(0,n).map(s=>songItem(s));
+    } else if(b.k==='weak'){
+      const ranked=rankedSkills();
+      for(let i=0;i<ranked.length&&picks.length<n;i++){
+        const sk=ranked[i];const name=sk.name;
+        const drills=S.drills.filter(d=>(d.skills||[]).includes(sk.id)&&!used.has(d.id)&&!picks.some(p=>p.refId===d.id)).sort((a,c)=>daysSince(c.lastDone)+(lessonActive(c)?8:0)+j()-daysSince(a.lastDone)-(lessonActive(a)?8:0));
+        const ss=songs.filter(s=>(s.skills||[]).includes(sk.id)&&s.stage!=='maintenance'&&!used.has(s.id)&&!picks.some(p=>p.refId===s.id)).sort((a,c)=>score(c)-score(a));
+        const preferSong=picks.length%2===1;
+        let it=null;
+        if(preferSong&&ss[0])it=songItem(ss[0],{task:`Play ${ss[0].title} with all your attention on ${name.toLowerCase()}: ${SKILL_CUES[sk.id]||'focus on this one skill'}.`,skills:[sk.id]});
+        else if(drills[0])it=drillItem(drills[0]);
+        else if(ss[0])it=songItem(ss[0],{task:`Play ${ss[0].title} with all your attention on ${name.toLowerCase()}: ${SKILL_CUES[sk.id]||'focus on this one skill'}.`,skills:[sk.id]});
+        if(it){it.focusSkill=name;picks.push(it);used.add(it.refId)}
+      }
+    } else if(b.k==='maint'){
+      const due=s=>daysSince(s.lastReview||s.lastPracticed)-(s.reviewInterval||2);
+      picks=maintPool.filter(s=>!used.has(s.id)).sort((a,c)=>due(c)+j()-due(a)).slice(0,n).map(s=>songItem(s));
+    } else if(b.k==='harvest'){
+      const src=songs.filter(s=>s.stage!=='learning').sort((a,c)=>(c.lastPracticed||'').localeCompare(a.lastPracticed||'')+(Math.random()-.5))[0];
+      if(src)picks=[{kind:'prompt',refId:src.id,title:'Idea harvest',sub:'from '+src.title,skills:[],task:HARVEST[Math.floor(Math.random()*HARVEST.length)](src.title)+' Write what you find in the song’s Ideas notes.',hasBpm:false,link:'song'}];
+    }
+    picks.forEach(p=>{if(p.refId&&p.kind!=='prompt')used.add(p.refId)});
+    if(!picks.length)continue;
+    picks.forEach(p=>items.push({...p,block:b.k,raw:b.mins/picks.length}));
+  }
+  // whole minutes summing to T
+  items.forEach(i=>i.minutes=Math.floor(i.raw));
+  let rem=T-items.reduce((s,i)=>s+i.minutes,0);
+  const order=[...items].sort((a,b)=>(b.raw%1)-(a.raw%1));
+  for(let i=0;rem>0&&order.length;i++,rem--)order[i%order.length].minutes++;
+  const stamp=Date.now().toString(36);
+  return items.map((it,i)=>{delete it.raw;return {...it,key:stamp+i,done:false,elapsedSec:0,actualMinutes:null,bpm:null,clean:null}});
+}
+
+/* ---------- session actions ---------- */
+function startSession(T){
+  T=Math.max(10,Math.min(240,Math.round(T)));
+  const now=new Date();
+  const id=today()+'-'+String(now.getHours()).padStart(2,'0')+String(now.getMinutes()).padStart(2,'0')+String(now.getSeconds()).padStart(2,'0');
+  S.session={id,date:today(),startedAt:now.toISOString(),plannedMinutes:T,status:'active',items:buildPlan(T)};
+  saveSession(true);render();window.scrollTo({top:0});
+}
+function sessionTouched(){return S.session&&S.session.items.some(i=>i.done||i.elapsedSec>5)}
+function shuffle(){if(!S.session||sessionTouched())return;stopTimer();S.session.items=buildPlan(S.session.plannedMinutes);saveSession(true);render()}
+function discardSession(){if(!S.session)return;stopTimer();const id=S.session.id;S.session=null;S.sessions=S.sessions.filter(s=>s.id!==id);del('sessions/'+id);render()}
+function finishSession(){if(!S.session)return;stopTimer();S.session.status='done';S.session.finishedAt=new Date().toISOString();saveSession(true);S.lastFinished=clone(S.session);S.sessions=[S.lastFinished,...S.sessions.filter(x=>x.id!==S.session.id)];S.session=null;render()}
+function findItem(k){return S.session&&S.session.items.find(i=>i.key===k)}
+
+let tick=null;
+function toggleTimer(k){
+  if(S.running===k){stopTimer();render();return}
+  stopTimer();S.running=k;const it=findItem(k);if(!it)return;
+  let last=Date.now();
+  tick=setInterval(()=>{const now=Date.now();it.elapsedSec+=(now-last)/1000;last=now;
+    const el=document.querySelector(`[data-clock="${k}"]`);
+    if(el)el.textContent=clockText(it);
+    if(!it._chimed&&it.elapsedSec>=it.minutes*60){it._chimed=true;chime();toast(it.title+': time is up')}
+  },500);
+  render();
+}
+function stopTimer(){if(tick){clearInterval(tick);tick=null}if(S.running){S.running=null;saveSession()}}
+function clockText(it){const left=it.minutes*60-it.elapsedSec;return left>=0?fmtClock(left)+' left':'+'+fmtClock(-left)+' over'}
+let actx=null;
+function chime(){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();[660,880].forEach((f,i)=>{const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=f;o.type='sine';g.gain.setValueAtTime(.0001,actx.currentTime+i*.18);g.gain.exponentialRampToValueAtTime(.2,actx.currentTime+i*.18+.02);g.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+i*.18+.5);o.connect(g).connect(actx.destination);o.start(actx.currentTime+i*.18);o.stop(actx.currentTime+i*.18+.55)})}catch(e){}}
+
+function completeItem(k){
+  const it=findItem(k);if(!it)return;
+  if(S.running===k)stopTimer();
+  if(it.actualMinutes==null)it.actualMinutes=it.elapsedSec>60?Math.round(it.elapsedSec/60):it.minutes;
+  it.done=true;const d=today();
+  if(it.kind==='song'&&it.refId){
+    const s=S.songs.find(x=>x.id===it.refId);
+    if(s){const patch={lastPracticed:d};
+      if(it.bpm){patch.currentBpm=it.bpm;patch.bpmHistory=[...(s.bpmHistory||[]).filter(h=>h.d!==d),{d,bpm:it.bpm}]}
+      if(it.block==='maint'||s.stage==='maintenance'){patch.lastReview=d;patch.reviewInterval=(it.clean||0)>=4?Math.min((s.reviewInterval||2)*2,30):2}
+      patchSong(s.id,patch)}
+  } else if(it.kind==='drill'&&it.refId){patchDrill(it.refId,{lastDone:d})}
+  saveSession(true);render();
+}
+function undoItem(k){const it=findItem(k);if(!it)return;it.done=false;saveSession(true);render()}
+
+/* ---------- board actions ---------- */
+function moveStage(id,dir){
+  const s=S.songs.find(x=>x.id===id);if(!s)return;const i=STAGES.findIndex(x=>x.k===s.stage);const n=STAGES[i+dir];if(!n)return;
+  setStage(s,n.k);
+}
+function setStage(s,k){if(s.stage===k)return;const hist=[...(s.stageHistory||[]),{d:today(),stage:k}];patchSong(s.id,{stage:k,stageHistory:hist});toast(`${s.title} → ${STAGE_L[k]}`);render()}
+function newSong(fields){
+  const base=slug(fields.title);let id=base,n=2;while(S.songs.some(s=>s.id===id))id=base+'-'+n++;
+  const doc={title:fields.title,artist:fields.artist||'',stage:fields.stage||'learning',skills:fields.skills||[],teaches:fields.teaches||'',notes:fields.notes||'',
+    currentBpm:null,targetBpm:null,bpmHistory:[],lastPracticed:null,reviewInterval:2,lastReview:null,stageHistory:[{d:today(),stage:fields.stage||'learning'}],lessonNote:'',lessonUntil:null,addedAt:today()};
+  S.songs.push({id,...doc});save('songs/'+id,doc);return id;
+}
+
+/* ---------- views ---------- */
+function render(){
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-current',b.dataset.tab===S.tab?'page':'false'));
+  const m=$('#main');
+  if(!S.ready&&!S.offline){m.innerHTML=`<section class="view"><div class="empty">Loading your songs and practice log…</div></section>`;return}
+  m.innerHTML=({today:viewToday,songs:viewSongs,discover:viewDiscover,progress:viewProgress}[S.tab]||viewToday)();
+}
+function chipsFor(ids){const sk=Object.fromEntries(S.skills.map(s=>[s.id,s]));return `<div class="chips">${(ids||[]).filter(i=>sk[i]).map(i=>`<span class="chip${sk[i].focus?' focus':''}">${esc(sk[i].name)}</span>`).join('')}</div>`}
+function offlineBanner(){return !S.db?`<div class="banner">Your data isn't connected in this view, so nothing will be saved. Open Fretwork on claude.ai while signed in.</div>`:''}
+
+function viewToday(){
+  if(S.session)return viewSession();
+  const m=minutesByDate();const t=today();const todayMin=m[t]||0;const goal=S.profile.dailyGoal||90;
+  const ranked=rankedSkills();const sm=skillMinutes(28);
+  const behind=ranked.slice(0,3);
+  const learning=S.songs.filter(s=>s.stage==='learning').length;
+  const dayTd=todayDone(null);
+  const done=S.lastFinished;
+  const doneCard=done?(()=>{const tot=done.items.reduce((s,i)=>s+itemMins(i),0);const bpmLogs=done.items.filter(i=>i.done&&i.bpm);
+    return `<div class="panel"><div class="eyebrow">Session saved</div><h2 style="margin-top:4px">${fmtMin(tot)} logged · ${done.items.filter(i=>i.done).length} of ${done.items.length} items done</h2>${bpmLogs.length?`<p class="muted" style="margin:6px 0 0">${bpmLogs.map(i=>`${esc(i.title)} ${i.bpm} BPM`).join(' · ')}</p>`:''}</div>`})():'';
+  return `<section class="view">${offlineBanner()}${doneCard}
+  <div class="picker">
+    <div class="panel">
+      <div class="eyebrow">${new Date().toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'})}</div>
+      <h1 style="margin-top:6px">${dayTd.count?'How much time for your next session?':'How much time do you have today?'}</h1>
+      ${dayTd.count?`<p class="muted" style="margin:8px 0 0;max-width:60ch">You've done ${fmtMin(dayTd.total)} today in ${dayTd.count} session${dayTd.count===1?'':'s'}. This plan fills in what ${dayTd.count===1?'it':'they'} didn't cover and skips songs and drills you already played, so the whole day stays balanced.</p>`:''}
+      <div class="times">${[20,30,45,60,90,120].map(n=>`<button class="time" data-act="start" data-min="${n}"><b>${n}</b><span>${n<=30?'Short: the essentials':n<=60?'Balanced session':'Full session'}</span></button>`).join('')}</div>
+      <form class="custom" data-act="custom"><label for="cmin" class="muted">Other:</label><input id="cmin" type="number" min="10" max="240" step="5" placeholder="75"> <span class="muted">minutes</span><button class="btn" type="submit">Build plan</button></form>
+    </div>
+    <div class="panel glance">
+      <div class="eyebrow">At a glance</div>
+      <div class="kv"><span>Today so far</span><span class="mono">${fmtMin(todayMin)} / ${goal}m</span></div>
+      <div class="kv"><span>Streak</span><span class="mono">${streak()} day${streak()===1?'':'s'}</span></div>
+      <div class="kv"><span>Songs in Learning</span><span class="mono">${learning}</span></div>
+      <div><div class="muted" style="font-size:13px;margin-bottom:6px">Skills getting the least time (28 days)</div>
+        <div class="chips">${behind.map(s=>`<span class="chip${s.focus?' focus':''}">${esc(s.name)} · ${Math.round(sm[s.id]||0)}m</span>`).join('')||'<span class="muted">No skills yet</span>'}</div></div>
+      ${learning<2?`<div class="banner">Only ${learning} song${learning===1?'':'s'} in Learning. <a href="#" data-act="tab" data-tab="discover" style="color:inherit">Pick something new in Discover</a> so you don't run out of material.</div>`:''}
+    </div>
+  </div></section>`;
+}
+function viewSession(){
+  const s=S.session;const doneMin=s.items.reduce((a,i)=>a+itemMins(i),0);const pct=Math.min(100,doneMin/s.plannedMinutes*100);
+  const touched=sessionTouched();
+  return `<section class="view">${offlineBanner()}
+  <div class="sesshead">
+    <div><div class="eyebrow">${(()=>{const n=todayDone(s.id).count+1;return n>1?`Session ${n} today`:`Today's plan`})()} · ${s.plannedMinutes} minutes</div><h1 style="margin-top:6px">${fmtMin(doneMin)} done</h1></div>
+    <div class="meter" role="progressbar" aria-valuenow="${Math.round(pct)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
+    <div class="row">${touched?'':`<button class="btn" data-act="shuffle">Shuffle plan</button><button class="btn ghost" data-act="discard">Change time</button>`}<button class="btn primary" data-act="finish">Finish session</button></div>
+  </div>
+  <div class="items">${s.items.map(itemHtml).join('')}</div>
+  <p class="muted" style="font-size:13px;margin:0">Order follows research on practice: hardest new material while you're fresh, a mix of items (interleaving) rather than one long block, and a non-stop run-through at the end of polish items so you practise playing songs all the way through.</p>
+  </section>`;
+}
+function itemHtml(it){
+  const run=S.running===it.key;
+  const titleLink=it.kind==='song'||(it.kind==='prompt'&&it.link==='song')?`<a data-act="opensong" data-id="${esc(it.refId)}">${esc(it.title)}</a>`:it.link==='discover'?`<a data-act="tab" data-tab="discover">${esc(it.title)}</a>`:esc(it.title);
+  const sub=it.focusSkill?`<span class="chip focus">${esc(it.focusSkill)}</span>`:(it.sub?`<span class="muted" style="font-weight:400;font-size:14px">${esc(it.sub)}</span>`:'');
+  if(it.done){
+    return `<div class="item done b-${it.block}"><div class="blk"><span class="lbl">${BLOCK_L[it.block]}</span><span class="mins">${it.actualMinutes??it.minutes}m</span></div>
+    <div><div class="ititle">✓ ${titleLink} ${sub}</div><div class="row" style="justify-content:space-between;margin-top:4px"><span class="logged">${[it.bpm?it.bpm+' BPM':'',it.clean?'clean '+it.clean+'/5':''].filter(Boolean).join(' · ')||'Logged'}</span><button class="btn ghost small" data-act="undo" data-k="${it.key}">Undo</button></div></div></div>`;
+  }
+  return `<div class="item b-${it.block}${run?' running':''}">
+    <div class="blk"><span class="lbl">${BLOCK_L[it.block]}</span><span class="mins">${it.minutes}m</span></div>
+    <div>
+      <div class="ititle">${titleLink} ${sub}</div>
+      <p class="task">${esc(it.task)}</p>
+      ${it.lessonNote?`<div class="lesson"><b>From your lesson:</b> ${esc(it.lessonNote)}</div>`:''}
+      <div class="ctrl">
+        <button class="btn${run?' primary':''}" data-act="timer" data-k="${it.key}" aria-label="${run?'Pause':'Start'} timer">${run?'❚❚ Pause':'▶ Start'}</button>
+        <span class="timer" data-clock="${it.key}">${clockText(it)}</span>
+        ${it.hasBpm?`<label class="row" style="gap:6px"><span class="muted" style="font-size:13px">Clean BPM</span><input class="bpm" id="bpm-${it.key}" type="number" min="30" max="300" inputmode="numeric" data-field="bpm" data-k="${it.key}" value="${it.bpm??''}"></label>`:''}
+        ${it.kind!=='prompt'?`<span class="row" style="gap:6px"><span class="muted" style="font-size:13px">How clean</span><span class="clean" role="group" aria-label="How clean, 1 to 5">${[1,2,3,4,5].map(n=>`<button data-act="clean" data-k="${it.key}" data-n="${n}" aria-pressed="${it.clean===n}">${n}</button>`).join('')}</span></span>`:''}
+        <span class="spacer"></span>
+        <button class="btn primary" data-act="done" data-k="${it.key}">Done</button>
+      </div>
+    </div></div>`;
+}
+
+function viewSongs(){
+  const cols=STAGES.map(st=>{const list=S.songs.filter(s=>s.stage===st.k&&!s.archived).sort((a,b)=>a.title.localeCompare(b.title));
+    return `<div class="col st-${st.k}"><div class="colhead"><h3><span>${st.l}</span><span class="mono muted">${list.length}</span></h3><p>${st.hint}</p></div>
+    ${list.map(cardHtml).join('')||'<div class="empty" style="padding:16px;font-size:13px">Nothing here</div>'}</div>`}).join('');
+  return `<section class="view">${offlineBanner()}
+  <div class="row" style="justify-content:space-between"><div><h1>Songs</h1><p class="muted" style="margin:4px 0 0">You decide when a song moves on. Open a song for its idea notes, BPM history and skills.</p></div><button class="btn primary" data-act="addsong">Add song</button></div>
+  <div class="board">${cols}</div></section>`;
+}
+function cardHtml(s){
+  const i=STAGES.findIndex(x=>x.k===s.stage);const pct=s.targetBpm&&s.currentBpm?Math.min(100,s.currentBpm/s.targetBpm*100):0;
+  return `<div class="card" role="button" tabindex="0" data-act="opensong" data-id="${esc(s.id)}">
+    <div><div class="t">${esc(s.title)}</div><div class="a">${esc(s.artist)}</div></div>
+    ${chipsFor(s.skills)}
+    ${s.targetBpm?`<div class="bpmbar"><div class="track"><i style="width:${pct}%"></i></div><span>${s.currentBpm??'–'}/${s.targetBpm}</span></div>`:(s.currentBpm?`<div class="bpmbar"><span>${s.currentBpm} BPM</span></div>`:'')}
+    ${lessonActive(s)?`<span class="chip focus">Lesson focus</span>`:''}
+    <div class="moves"><button data-act="move" data-id="${esc(s.id)}" data-dir="-1" ${i<=0?'disabled':''} aria-label="Move back a stage">← ${i>0?STAGES[i-1].l:''}</button><button data-act="move" data-id="${esc(s.id)}" data-dir="1" ${i>=STAGES.length-1?'disabled':''} aria-label="Move forward a stage">${i<STAGES.length-1?STAGES[i+1].l:''} →</button></div>
+  </div>`;
+}
+
+function viewDiscover(){
+  const live=S.suggestions.filter(s=>s.status!=='added'&&s.status!=='dismissed');
+  const tiers=[['ready','Ready now','About the level of your current songs'],['step','One step up','One new demand each'],['reach','Reach goals','Longer projects to grow into']];
+  const learning=S.songs.filter(s=>s.stage==='learning').length;
+  const ranked=rankedSkills().slice(0,2).map(s=>s.id);
+  return `<section class="view">${offlineBanner()}
+  <div><h1>Discover</h1><p class="muted" style="margin:4px 0 0;max-width:70ch">Songs picked for your taste and your weak spots. Highlighted skills are the ones getting the least time lately. Ask Claude to refresh this list from a playlist export or after a lesson.</p></div>
+  ${learning<2?`<div class="banner">You have ${learning} song${learning===1?'':'s'} in Learning. Two or three keeps fresh material in every session.</div>`:''}
+  ${live.length?`<div class="tiers">${tiers.map(([k,l,h])=>{const list=live.filter(s=>s.tier===k).sort((a,b)=>score2(b,ranked)-score2(a,ranked));
+    return `<div class="col"><div class="colhead"><h3><span>${l}</span><span class="mono muted">${list.length}</span></h3><p>${h}</p></div>${list.map(sugHtml).join('')||'<div class="empty" style="padding:16px;font-size:13px">None right now</div>'}</div>`}).join('')}</div>`
+  :`<div class="empty">No suggestions yet. Give Claude a playlist export and it will fill this page.</div>`}
+  </section>`;
+}
+function score2(s,ranked){return (s.skills||[]).filter(k=>ranked.includes(k)).length}
+function sugHtml(s){return `<div class="sug"><div><div class="t" style="font-weight:600">${esc(s.title)}</div><div class="muted" style="font-size:13px">${esc(s.artist)}</div></div>
+  ${chipsFor(s.skills)}<p>${esc(s.why)}</p>${s.ideas?`<p class="ideas"><b>Ideas to steal:</b> ${esc(s.ideas)}</p>`:''}${s.verify?`<p class="verify">Check: ${esc(s.verify)}</p>`:''}
+  <div class="row"><button class="btn primary small" data-act="adopt" data-id="${esc(s.id)}">Add to Learning</button><button class="btn ghost small" data-act="dismiss" data-id="${esc(s.id)}">Not for me</button></div></div>`}
+
+function viewProgress(){
+  const m=minutesByDate();const t=today();const goal=S.profile.dailyGoal||90;
+  const dow=(new Date(t+'T12:00').getDay()+6)%7;const monday=addDays(t,-dow);
+  let week=0;for(let i=0;i<7;i++)week+=m[addDays(monday,i)]||0;
+  let d28=0;for(let i=0;i<28;i++)d28+=m[addDays(t,-i)]||0;
+  const since=addDays(t,-30);let moved=0;
+  for(const s of S.songs){const h=s.stageHistory||[];for(let i=1;i<h.length;i++){if(h[i].d>=since&&STAGES.findIndex(x=>x.k===h[i].stage)>STAGES.findIndex(x=>x.k===h[i-1].stage))moved++}}
+  const sm=skillMinutes(28);const totalW=S.skills.reduce((a,s)=>a+(s.focus?1.3:1),0)||1;const totalM=Object.values(sm).reduce((a,b)=>a+b,0);
+  const maxBar=Math.max(1,...S.skills.map(s=>Math.max(sm[s.id]||0,totalM*(s.focus?1.3:1)/totalW)));
+  const sbars=[...S.skills].sort((a,b)=>(a.order??99)-(b.order??99)).map(s=>{const tgt=totalM*(s.focus?1.3:1)/totalW;const v=sm[s.id]||0;
+    return `<div class="sbar"><span>${esc(s.name)}${s.focus?' <span class="chip focus" style="font-size:10px;padding:0 6px">focus</span>':''}</span><div class="track"><i class="${totalM&&v<tgt*.6?'low':''}" style="width:${v/maxBar*100}%"></i>${totalM?`<u style="left:${tgt/maxBar*100}%" title="Even share"></u>`:''}</div><span class="mono muted" style="text-align:right">${Math.round(v)}m</span></div>`}).join('');
+  const withBpm=S.songs.filter(s=>(s.bpmHistory||[]).length);
+  if(!S.bpmSong||!withBpm.some(s=>s.id===S.bpmSong))S.bpmSong=withBpm[0]?.id||null;
+  return `<section class="view">${offlineBanner()}
+  <h1>Progress</h1>
+  <div class="kpis">
+    <div class="kpi"><span>This week</span><b>${fmtMin(week)}</b><span>goal ${fmtMin(goal*7)}</span></div>
+    <div class="kpi"><span>Streak</span><b>${streak()}</b><span>days in a row</span></div>
+    <div class="kpi"><span>Daily average</span><b>${fmtMin(d28/28)}</b><span>last 28 days</span></div>
+    <div class="kpi"><span>Songs moved forward</span><b>${moved}</b><span>last 30 days</span></div>
+  </div>
+  <div class="panel chart"><div class="row" style="justify-content:space-between"><h2>Minutes per day</h2><span class="muted" style="font-size:13px">last 28 days · dashed line = ${goal}m goal</span></div>${dailyChart(m,goal)}</div>
+  <div class="grid2">
+    <div class="panel"><h2>Skill balance</h2><p class="muted" style="margin:4px 0 0;font-size:13px">Minutes per skill, last 28 days. The tick is an even share (focus skills get 1.3×). Orange bars are well behind; the planner pushes those first.</p>
+      <div class="sbars">${sbars||'<div class="muted">No skills yet</div>'}</div></div>
+    <div class="panel chart"><div class="row" style="justify-content:space-between"><h2>Tempo</h2>
+      ${withBpm.length?`<select id="bpmsel" data-act="bpmsel" aria-label="Song">${withBpm.map(s=>`<option value="${esc(s.id)}" ${s.id===S.bpmSong?'selected':''}>${esc(s.title)}</option>`).join('')}</select>`:''}</div>
+      ${S.bpmSong?bpmChart(S.songs.find(s=>s.id===S.bpmSong)):'<div class="empty" style="margin-top:12px">Log a clean BPM on a song during practice and its tempo history shows up here.</div>'}</div>
+  </div>
+  <div class="grid2">
+    <div class="panel"><h2>Skills</h2><p class="muted" style="margin:4px 0 0;font-size:13px">Mark the ones you most want to grow as focus. Add your own anytime.</p>
+      <div class="skilllist">${[...S.skills].sort((a,b)=>(a.order??99)-(b.order??99)).map(s=>`<div class="r"><span>${esc(s.name)}</span><label class="row" style="gap:6px;font-size:13px"><input type="checkbox" id="focus-${esc(s.id)}" data-act="focus" data-id="${esc(s.id)}" ${s.focus?'checked':''}> focus</label></div>`).join('')}</div>
+      <form class="row" data-act="addskill" style="margin-top:12px"><input id="newskill" placeholder="e.g. Slide guitar" aria-label="New skill name" style="flex:1;min-width:0"><button class="btn" type="submit">Add skill</button></form></div>
+    <div class="panel"><h2>Daily goal</h2><p class="muted" style="margin:4px 0 0;font-size:13px">Practice time, not counting songwriting.</p>
+      <form class="row" data-act="goal" style="margin-top:12px"><input id="goalmin" type="number" min="10" max="300" step="5" value="${goal}" style="width:100px" aria-label="Daily goal in minutes"><span class="muted">minutes a day</span><button class="btn" type="submit">Save</button></form></div>
+  </div></section>`;
+}
+function dailyChart(m,goal){
+  const W=640,H=180,pl=34,pr=8,pt=12,pb=24;const days=[...Array(28)].map((_,i)=>addDays(today(),i-27));
+  const vals=days.map(d=>m[d]||0);const max=Math.max(goal*1.25,...vals,10);const step=max>150?60:30;
+  const bw=(W-pl-pr)/28;const y=v=>pt+(H-pt-pb)*(1-v/max);
+  let g='';for(let v=0;v<=max;v+=step)g+=`<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${pl-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`;
+  const bars=vals.map((v,i)=>v?`<rect x="${pl+i*bw+2}" y="${y(v)}" width="${bw-4}" height="${H-pb-y(v)}" rx="2" fill="${v>=goal?'var(--accent)':'var(--brass)'}"><title>${days[i]}: ${Math.round(v)} min</title></rect>`:'').join('');
+  const lbl=[0,7,14,21,27].map(i=>`<text x="${pl+i*bw+bw/2}" y="${H-6}" text-anchor="middle">${new Date(days[i]+'T12:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}</text>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Minutes practised per day">${g}${bars}<line x1="${pl}" x2="${W-pr}" y1="${y(goal)}" y2="${y(goal)}" stroke="var(--ink)" stroke-dasharray="4 4" opacity=".6"/>${lbl}</svg>`;
+}
+function bpmChart(s){
+  if(!s)return '';const h=(s.bpmHistory||[]).slice(-30);const W=520,H=200,pl=36,pr=12,pt=14,pb=26;
+  const vals=h.map(x=>x.bpm);const tgt=s.targetBpm;
+  const lo=Math.max(0,Math.floor((Math.min(...vals,tgt||Infinity)-8)/10)*10);const hi=Math.ceil((Math.max(...vals,tgt||0)+6)/10)*10;
+  const x=i=>h.length===1?(pl+W-pr)/2:pl+(W-pl-pr)*i/(h.length-1);const y=v=>pt+(H-pt-pb)*(1-(v-lo)/(hi-lo||1));
+  let g='';const st=(hi-lo)>60?20:10;for(let v=lo;v<=hi;v+=st)g+=`<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${pl-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`;
+  const pts=h.map((p,i)=>`${x(i)},${y(p.bpm)}`).join(' ');
+  const area=h.length>1?`<polygon points="${x(0)},${H-pb} ${pts} ${x(h.length-1)},${H-pb}" fill="var(--accent)" opacity=".12"/>`:'';
+  const dots=h.map((p,i)=>`<circle cx="${x(i)}" cy="${y(p.bpm)}" r="${i===h.length-1?4.5:3}" fill="var(--accent)"><title>${p.d}: ${p.bpm} BPM</title></circle>`).join('');
+  const last=h[h.length-1];
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Tempo history for ${esc(s.title)}">${g}${area}${tgt?`<line x1="${pl}" x2="${W-pr}" y1="${y(tgt)}" y2="${y(tgt)}" stroke="var(--good)" stroke-dasharray="5 4"/><text x="${W-pr}" y="${y(tgt)-5}" text-anchor="end" style="fill:var(--good)">target ${tgt}</text>`:''}<polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2"/>${dots}
+  <text x="${pl}" y="${H-6}">${h[0].d.slice(5)}</text><text x="${W-pr}" y="${H-6}" text-anchor="end">${last.d.slice(5)}</text></svg>`;
+}
+
+/* ---------- song dialog ---------- */
+function openSong(id){
+  const s=S.songs.find(x=>x.id===id);if(!s)return;S.confirmDel=null;
+  const dlg=$('#dlg');
+  const mins=songMinutes(id);
+  dlg.innerHTML=`<div class="dlg">
+    <div class="row" style="justify-content:space-between;align-items:flex-start"><div><div class="eyebrow">${STAGE_L[s.stage]||''}</div><h2 style="margin-top:2px">${esc(s.title)}</h2><div class="muted">${esc(s.artist)}</div></div><button class="btn ghost" data-dact="close" aria-label="Close">Close</button></div>
+    ${lessonActive(s)?`<div class="lesson"><b>From your lesson:</b> ${esc(s.lessonNote)}</div>`:''}
+    <div class="fields">
+      <label class="f">Title<input id="d-title" value="${esc(s.title)}"></label>
+      <label class="f">Artist<input id="d-artist" value="${esc(s.artist)}"></label>
+      <label class="f">Stage<select id="d-stage">${STAGES.map(st=>`<option value="${st.k}" ${st.k===s.stage?'selected':''}>${st.l}</option>`).join('')}</select></label>
+      <div class="row" style="gap:12px"><label class="f" style="flex:1">Current clean BPM<input id="d-cur" type="number" min="30" max="300" value="${s.currentBpm??''}"></label><label class="f" style="flex:1">Target BPM<input id="d-tgt" type="number" min="30" max="300" value="${s.targetBpm??''}"></label></div>
+    </div>
+    <div><div class="eyebrow" style="margin-bottom:6px">Skills it builds</div><div class="skilltoggles">${S.skills.map(k=>`<button data-dact="skill" data-id="${esc(k.id)}" aria-pressed="${(s.skills||[]).includes(k.id)}">${esc(k.name)}</button>`).join('')}</div></div>
+    <label class="f">What this song teaches<input id="d-teaches" value="${esc(s.teaches)}" placeholder="One line: the core skills you're building"></label>
+    <label class="f notes">Ideas &amp; notes <span style="font-size:12px">· saved as you type</span><textarea id="d-notes" placeholder="Voicings, riff shapes, rhythm feels, progressions worth stealing for your own songs. Lesson tips. Where you got stuck.">${esc(s.notes)}</textarea></label>
+    <div class="row muted" style="font-size:13px;gap:18px"><span>Practised: <span class="mono">${fmtMin(mins)}</span></span><span>Last: <span class="mono">${s.lastPracticed||'never'}</span></span>${s.stage==='maintenance'?`<span>Review every <span class="mono">${s.reviewInterval||2}</span> days</span>`:''}</div>
+    <div class="row" style="justify-content:space-between"><button class="btn ghost danger" data-dact="delete" id="d-del">Delete song</button><button class="btn primary" data-dact="close">Done</button></div>
+  </div>`;
+  dlg.dataset.id=id;
+  try{dlg.showModal()}catch(e){dlg.setAttribute('open','')}
+}
+let notesT;
+$('#dlg').addEventListener('input',e=>{
+  const id=$('#dlg').dataset.id;if(e.target.id==='d-notes'){clearTimeout(notesT);const v=e.target.value;notesT=setTimeout(()=>patchSong(id,{notes:v}),700)}
+});
+$('#dlg').addEventListener('change',e=>{
+  const id=$('#dlg').dataset.id;const s=S.songs.find(x=>x.id===id);if(!s)return;const v=e.target.value;
+  const num=x=>x===''?null:Math.max(20,Math.min(320,Math.round(+x)));
+  switch(e.target.id){
+    case 'd-title':if(v.trim())patchSong(id,{title:v.trim()});break;
+    case 'd-artist':patchSong(id,{artist:v.trim()});break;
+    case 'd-stage':setStage(s,v);break;
+    case 'd-cur':{const b=num(v);const p={currentBpm:b};if(b)p.bpmHistory=[...(s.bpmHistory||[]).filter(h=>h.d!==today()),{d:today(),bpm:b}];patchSong(id,p);break}
+    case 'd-tgt':patchSong(id,{targetBpm:num(v)});break;
+    case 'd-teaches':patchSong(id,{teaches:v.trim()});break;
+  }
+});
+$('#dlg').addEventListener('click',e=>{
+  const b=e.target.closest('[data-dact]');if(!b)return;const id=$('#dlg').dataset.id;const s=S.songs.find(x=>x.id===id);
+  if(b.dataset.dact==='close'){closeDlg()}
+  else if(b.dataset.dact==='skill'&&s){const on=b.getAttribute('aria-pressed')==='true';const sk=new Set(s.skills||[]);on?sk.delete(b.dataset.id):sk.add(b.dataset.id);b.setAttribute('aria-pressed',String(!on));patchSong(id,{skills:[...sk]})}
+  else if(b.dataset.dact==='delete'&&s){
+    if(S.confirmDel!==id){S.confirmDel=id;b.textContent='Click again to delete for good';return}
+    S.songs=S.songs.filter(x=>x.id!==id);del('songs/'+id);closeDlg();toast('Deleted '+s.title)}
+});
+$('#dlg').addEventListener('close',()=>{clearTimeout(notesT);const ta=$('#d-notes');const id=$('#dlg').dataset.id;const s=S.songs.find(x=>x.id===id);if(ta&&s&&ta.value!==s.notes)patchSong(id,{notes:ta.value});render()});
+function closeDlg(){const d=$('#dlg');const ta=$('#d-notes');const id=d.dataset.id;const s=S.songs.find(x=>x.id===id);if(ta&&s&&ta.value!==s.notes){clearTimeout(notesT);patchSong(id,{notes:ta.value})}try{d.close()}catch(e){d.removeAttribute('open')}}
+
+function openAddSong(){
+  const dlg=$('#dlg');dlg.dataset.id='';
+  dlg.innerHTML=`<form class="dlg" id="addform"><h2>Add a song</h2>
+    <div class="fields"><label class="f">Title<input id="a-title" required></label><label class="f">Artist<input id="a-artist"></label>
+    <label class="f">Stage<select id="a-stage">${STAGES.map(st=>`<option value="${st.k}">${st.l}</option>`).join('')}</select></label></div>
+    <div><div class="eyebrow" style="margin-bottom:6px">Skills it builds</div><div class="skilltoggles" id="a-skills">${S.skills.map(k=>`<button type="button" data-id="${esc(k.id)}" aria-pressed="false">${esc(k.name)}</button>`).join('')}</div></div>
+    <label class="f">What this song teaches<input id="a-teaches" placeholder="One line"></label>
+    <div class="row" style="justify-content:flex-end"><button type="button" class="btn ghost" id="a-cancel">Cancel</button><button class="btn primary" type="submit">Add song</button></div></form>`;
+  $('#a-skills').addEventListener('click',e=>{const b=e.target.closest('button');if(b)b.setAttribute('aria-pressed',String(b.getAttribute('aria-pressed')!=='true'))});
+  $('#a-cancel').addEventListener('click',()=>dlg.close());
+  $('#addform').addEventListener('submit',e=>{e.preventDefault();const title=$('#a-title').value.trim();if(!title)return;
+    newSong({title,artist:$('#a-artist').value.trim(),stage:$('#a-stage').value,teaches:$('#a-teaches').value.trim(),skills:[...document.querySelectorAll('#a-skills [aria-pressed="true"]')].map(b=>b.dataset.id)});
+    dlg.close();toast('Added '+title)});
+  try{dlg.showModal()}catch(e){dlg.setAttribute('open','')}
+}
+
+/* ---------- events ---------- */
+document.querySelector('nav.tabs').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;go(b.dataset.tab)});
+function go(tab){S.tab=tab;try{localStorage.setItem('fw_tab',tab)}catch(e){}render();window.scrollTo({top:0})}
+$('#main').addEventListener('click',e=>{
+  const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
+  if(['start','tab','opensong','timer','clean','done','undo','shuffle','discard','finish','addsong','move','adopt','dismiss'].includes(a)&&b.tagName==='A')e.preventDefault();
+  if(a==='move')e.stopPropagation();
+  switch(a){
+    case 'start':S.lastFinished=null;startSession(+b.dataset.min);break;
+    case 'tab':go(b.dataset.tab);break;
+    case 'opensong':if(b.dataset.id)openSong(b.dataset.id);break;
+    case 'timer':toggleTimer(b.dataset.k);break;
+    case 'clean':{const it=findItem(b.dataset.k);if(it){it.clean=+b.dataset.n;saveSession();render()}break}
+    case 'done':completeItem(b.dataset.k);break;
+    case 'undo':undoItem(b.dataset.k);break;
+    case 'shuffle':shuffle();break;
+    case 'discard':discardSession();break;
+    case 'finish':finishSession();break;
+    case 'addsong':openAddSong();break;
+    case 'move':moveStage(b.dataset.id,+b.dataset.dir);break;
+    case 'adopt':{const s=S.suggestions.find(x=>x.id===b.dataset.id);if(!s)break;const id=newSong({title:s.title,artist:s.artist,stage:'learning',skills:s.skills,teaches:s.why,notes:s.ideas?('Ideas to steal: '+s.ideas):''});
+      s.status='added';save('suggestions/'+s.id,{status:'added',songId:id},'update');toast(s.title+' added to Learning');render();break}
+    case 'dismiss':{const s=S.suggestions.find(x=>x.id===b.dataset.id);if(!s)break;s.status='dismissed';save('suggestions/'+s.id,{status:'dismissed'},'update');render();break}
+  }
+});
+$('#main').addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.classList.contains('card')){e.preventDefault();openSong(e.target.dataset.id)}});
+$('#main').addEventListener('input',e=>{
+  const f=e.target.dataset.field;if(!f)return;const it=findItem(e.target.dataset.k);if(!it)return;
+  if(f==='bpm'){const v=e.target.value;it.bpm=v===''?null:Math.max(20,Math.min(320,Math.round(+v)));saveSession()}
+});
+$('#main').addEventListener('change',e=>{
+  const a=e.target.dataset.act;
+  if(a==='bpmsel'){S.bpmSong=e.target.value;render()}
+  if(a==='focus'){const s=S.skills.find(x=>x.id===e.target.dataset.id);if(s){s.focus=e.target.checked;save('skills/'+s.id,{focus:s.focus},'update')}}
+});
+$('#main').addEventListener('submit',e=>{
+  e.preventDefault();const a=e.target.dataset.act;
+  if(a==='custom'){const v=+$('#cmin').value;if(v>=10){S.lastFinished=null;startSession(v)}else toast('Enter at least 10 minutes')}
+  if(a==='addskill'){const n=$('#newskill').value.trim();if(!n)return;const id=slug(n).replace(/-/g,'_');if(S.skills.some(s=>s.id===id)){toast('That skill already exists');return}
+    const doc={name:n,order:S.skills.length+1,focus:false,description:''};S.skills.push({id,...doc});save('skills/'+id,doc);$('#newskill').value='';toast('Added '+n);render()}
+  if(a==='goal'){const v=Math.round(+$('#goalmin').value);if(v>=10){S.profile.dailyGoal=v;save('config/profile',{...S.profile});toast('Daily goal saved');render()}}
+});
+window.addEventListener('beforeunload',()=>{if(S.running){stopTimer()}});
+
+render();setStatus();initDb();
+</script>
