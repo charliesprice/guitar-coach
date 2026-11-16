@@ -169,6 +169,50 @@ dialog::backdrop{background:rgba(10,14,12,.45)}
 .notes textarea{min-height:180px;font-size:14px}
 .toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:8px;font-size:14px;z-index:20}
 @media (prefers-reduced-motion:no-preference){.item,.card{transition:border-color .15s,box-shadow .15s}}
+
+/* Covers */
+.cover{width:44px;height:44px;border-radius:6px;object-fit:cover;flex:none;background:var(--sunk);display:block}
+.cover.sm{width:26px;height:26px;border-radius:4px;align-self:center}
+.cover.lg{width:84px;height:84px;border-radius:8px}
+.card .head{display:flex;gap:10px;align-items:center;min-width:0}
+.card .head>div{min-width:0}
+
+/* Coach */
+.coach{display:flex;flex-direction:column;gap:12px}
+.rems{display:flex;flex-direction:column;gap:8px}
+.rem{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:14px;padding:8px 10px;border-radius:8px;background:var(--sunk)}
+.rem.on{background:var(--accent-soft)}
+.pinchips{display:flex;gap:6px;flex-wrap:wrap}
+.pinchip{display:inline-flex;align-items:center;gap:4px;font-size:13px;padding:3px 4px 3px 10px;border-radius:999px;background:var(--accent-soft);color:var(--ink)}
+.pinchip.skip{background:var(--warn-soft)}
+.pinchip button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:2px 6px;border-radius:99px}
+.pinchip button:hover{background:var(--surface);color:var(--ink)}
+.coachbar{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start}
+.coachbar textarea{flex:1;min-width:220px;min-height:44px;height:44px}
+.coachmsg{font-size:14px;background:var(--accent-soft);border-radius:8px;padding:10px 12px;white-space:pre-wrap}
+.swap{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+.swap select{max-width:100%}
+
+/* Notes */
+.notebox{margin-top:10px;display:grid;grid-template-columns:150px minmax(0,1fr);gap:8px}
+@media (max-width:600px){.notebox{grid-template-columns:1fr}}
+.notebox textarea{min-height:60px;font-size:14px}
+.donenote{font-size:13px;color:var(--ink);opacity:.8;margin-top:6px;white-space:pre-wrap}
+.log{display:flex;flex-direction:column;gap:6px}
+.logmonth{font:600 11px var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:8px}
+.logent{border-left:3px solid var(--line);padding:4px 0 6px 10px;display:flex;flex-direction:column;gap:2px}
+.logent .meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted)}
+.logent .txt{font-size:14px;white-space:pre-wrap}
+.logtools{display:flex;gap:8px;flex-wrap:wrap}
+.logtools input,.logtools select{font-size:13px;padding:5px 8px}
+.lognew{display:grid;grid-template-columns:140px minmax(0,1fr) auto;gap:8px;align-items:start}
+@media (max-width:560px){.lognew{grid-template-columns:1fr}}
+.lognew textarea{min-height:44px;font-size:14px}
+
+/* Techniques */
+.techs{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.links{display:flex;gap:10px;flex-wrap:wrap;font-size:13px}
+.links a{color:var(--accent)}
 </style>
 
 <header class="top"><div class="wrap topin">
@@ -231,8 +275,13 @@ function toast(msg){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTi
 
 /* ---------- state ---------- */
 const S={db:null,ready:false,offline:false,tab:'today',songs:[],drills:[],skills:[],suggestions:[],sessions:[],profile:{dailyGoal:90},
-  session:null,running:null,pendingRender:false,bpmSong:null,confirmDel:null};
+  session:null,running:null,pendingRender:false,bpmSong:null,confirmDel:null,
+  notes:[],sample:null,assets:null,coachBusy:null,coachMsg:'',swapKey:null,noteOpen:new Set(),logF:{part:'',q:''},
+  prefs:{date:'',pin:[],skip:[],skills:[],request:''}};
 try{const t=localStorage.getItem('fw_tab');if(t)S.tab=t}catch(e){}
+try{const p=JSON.parse(localStorage.getItem('fw_prefs')||'null');if(p&&p.date===localDate(new Date()))S.prefs={...S.prefs,...p}}catch(e){}
+function savePrefs(){S.prefs.date=today();try{localStorage.setItem('fw_prefs',JSON.stringify(S.prefs))}catch(e){}}
+const activeDrill=d=>!d.status||d.status==='active';
 
 /* ---------- persistence ---------- */
 const writeQ={};
@@ -265,6 +314,12 @@ async function initDb(){
     if(!S.session){const a=S.sessions.find(s=>s.status==='active'&&s.date===today());if(a)S.session=clone(a)}
     onData('sessions',!snap.metadata.fromCache)},onErr);
   db.doc('config/profile').onSnapshot(s=>{if(s.exists)S.profile={...S.profile,...clone(s.data())};scheduleRender()},()=>{});
+  db.collection('notes').orderBy('createdAt','desc').limit(1000).onSnapshot(snap=>{S.notes=snap.docs.map(d=>({id:d.id,...clone(d.data())}));refreshLog();scheduleRender()},e=>console.warn(e));
+}
+async function initExtras(){
+  try{S.sample=window.claude&&window.claude.use?await window.claude.use('sample'):null}catch(e){S.sample=null}
+  try{S.assets=window.claude&&window.claude.use?await window.claude.use('assets'):null}catch(e){S.assets=null}
+  scheduleRender();
 }
 function setStatus(){$('#status').textContent=S.offline?(S.db?'Offline: changes may not save':'Not saving: open on claude.ai, signed in'):'Saved to your account'}
 
@@ -359,33 +414,42 @@ function songTask(s){
 }
 function songItem(s,extra={}){return {kind:'song',refId:s.id,title:s.title,sub:s.artist||'',skills:s.skills||[],task:songTask(s),lessonNote:lessonActive(s)?s.lessonNote:'',hasBpm:['stitching','tempo','ready','maintenance'].includes(s.stage)||!!s.targetBpm,...extra}}
 function drillItem(d,extra={}){return {kind:'drill',refId:d.id,title:d.title,sub:'Drill',skills:d.skills||[],task:d.task||'',lessonNote:lessonActive(d)?d.lessonNote:'',hasBpm:true,...extra}}
-function buildPlan(T){
-  const songs=S.songs.filter(s=>!s.archived);const main=recentMain();const used=new Set();
+function isNewTech(d){return d.introducedAt&&daysSince(d.introducedAt)<=21}
+function buildPlan(T,prefs){
+  prefs=prefs||{pin:[],skip:[],skills:[]};
+  const pin=new Set(prefs.pin||[]),skip=new Set(prefs.skip||[]);
+  const songs=S.songs.filter(s=>!s.archived&&!skip.has(s.id));const main=recentMain();const used=new Set();
+  const drillsAll=S.drills.filter(d=>activeDrill(d)&&!skip.has(d.id));
   const td=todayDone(S.session&&S.session.id);
   const j=()=>Math.random()*2;
-  const score=s=>Math.min(daysSince(s.lastPracticed),14)+(lessonActive(s)?8:0)+j()-(main.has(s.id)?20:0)-(td.refs.has(s.id)?10:0);
+  const score=s=>Math.min(daysSince(s.lastPracticed),14)+(lessonActive(s)?8:0)+j()-(main.has(s.id)?20:0)-(td.refs.has(s.id)?10:0)+(pin.has(s.id)?100:0);
+  const dscore=d=>Math.min(daysSince(d.lastDone),14)+(lessonActive(d)?8:0)+(isNewTech(d)?6:0)+(pin.has(d.id)?100:0)-(td.refs.has(d.id)?10:0)+j();
   const polishPool=songs.filter(s=>['stitching','tempo','ready'].includes(s.stage));
   const maintPool=songs.filter(s=>s.stage==='maintenance');
   const avail=new Set(['stretch','weak']);
   if(polishPool.length)avail.add('polish');
   if(maintPool.length)avail.add('maint');
-  if(S.drills.some(d=>d.warmup))avail.add('warmup');
+  if(drillsAll.some(d=>d.warmup))avail.add('warmup');
   if(songs.some(s=>s.stage!=='learning'))avail.add('harvest');
   const alloc=dayAwareAlloc(T,avail,td);const items=[];
+  const prefSk=(prefs.skills||[]).map(id=>S.skills.find(s=>s.id===id)).filter(Boolean);
   for(const b of alloc){
     const n=Math.max(1,Math.round(b.mins/12));let picks=[];
     if(b.k==='warmup'){
-      picks=S.drills.filter(d=>d.warmup&&!used.has(d.id)).sort((a,c)=>daysSince(c.lastDone)+j()-daysSince(a.lastDone)).slice(0,n).map(d=>drillItem(d));
+      picks=drillsAll.filter(d=>d.warmup&&!used.has(d.id)).sort((a,c)=>dscore(c)-dscore(a)).slice(0,n).map(d=>drillItem(d));
     } else if(b.k==='stretch'){
       picks=songs.filter(s=>s.stage==='learning'&&!used.has(s.id)).sort((a,c)=>score(c)-score(a)).slice(0,n).map(s=>songItem(s));
       if(picks.length<n)picks.push({kind:'prompt',refId:null,title:'Start something new',sub:'From Discover',skills:[],task:'Open Discover and add a song to Learning. Then learn its first 4 bars slowly, or its last 4 bars so the ending gets the most reps.',hasBpm:false,link:'discover'});
     } else if(b.k==='polish'){
       picks=polishPool.filter(s=>!used.has(s.id)).sort((a,c)=>(score(c)+(c.stage==='tempo'?1:0))-(score(a)+(a.stage==='tempo'?1:0))).slice(0,n).map(s=>songItem(s));
     } else if(b.k==='weak'){
-      const ranked=rankedSkills();
+      const ranked=[...prefSk,...rankedSkills().filter(s=>!prefSk.includes(s))];
+      // a pinned drill or a newly introduced technique always gets a slot first
+      const firstD=drillsAll.filter(d=>!d.warmup&&(pin.has(d.id)||isNewTech(d))&&!used.has(d.id)).sort((a,c)=>dscore(c)-dscore(a))[0];
+      if(firstD){const it=drillItem(firstD);if(isNewTech(firstD))it.sub='New technique';picks.push(it);used.add(firstD.id)}
       for(let i=0;i<ranked.length&&picks.length<n;i++){
         const sk=ranked[i];const name=sk.name;
-        const drills=S.drills.filter(d=>(d.skills||[]).includes(sk.id)&&!used.has(d.id)&&!picks.some(p=>p.refId===d.id)).sort((a,c)=>daysSince(c.lastDone)+(lessonActive(c)?8:0)+j()-daysSince(a.lastDone)-(lessonActive(a)?8:0));
+        const drills=drillsAll.filter(d=>(d.skills||[]).includes(sk.id)&&!used.has(d.id)&&!picks.some(p=>p.refId===d.id)).sort((a,c)=>dscore(c)-dscore(a));
         const ss=songs.filter(s=>(s.skills||[]).includes(sk.id)&&s.stage!=='maintenance'&&!used.has(s.id)&&!picks.some(p=>p.refId===s.id)).sort((a,c)=>score(c)-score(a));
         const preferSong=picks.length%2===1;
         let it=null;
@@ -405,6 +469,16 @@ function buildPlan(T){
     if(!picks.length)continue;
     picks.forEach(p=>items.push({...p,block:b.k,raw:b.mins/picks.length}));
   }
+  // pinned songs/drills the blocks didn't reach replace a non-pinned item
+  for(const id of pin){
+    if(items.some(i=>i.refId===id&&i.kind!=='prompt'))continue;
+    const s=songs.find(x=>x.id===id),d=s?null:drillsAll.find(x=>x.id===id);if(!s&&!d)continue;
+    const want=s?(s.stage==='learning'?'stretch':s.stage==='maintenance'?'maint':'polish'):(d.warmup?'warmup':'weak');
+    const victims=items.filter(i=>!pin.has(i.refId)&&i.block!=='harvest');
+    const v=victims.find(i=>i.block===want)||victims.find(i=>i.block!=='warmup')||victims[0];
+    if(!v)continue;const it=s?songItem(s):drillItem(d);
+    items[items.indexOf(v)]={...it,block:v.block,raw:v.raw};
+  }
   // whole minutes summing to T
   items.forEach(i=>i.minutes=Math.floor(i.raw));
   let rem=T-items.reduce((s,i)=>s+i.minutes,0);
@@ -419,13 +493,16 @@ function startSession(T){
   T=Math.max(10,Math.min(240,Math.round(T)));
   const now=new Date();
   const id=today()+'-'+String(now.getHours()).padStart(2,'0')+String(now.getMinutes()).padStart(2,'0')+String(now.getSeconds()).padStart(2,'0');
-  S.session={id,date:today(),startedAt:now.toISOString(),plannedMinutes:T,status:'active',items:buildPlan(T)};
+  const prefs={pin:[...S.prefs.pin],skip:[...S.prefs.skip],skills:[...S.prefs.skills]};const req=(S.prefs.request||'').trim();
+  S.session={id,date:today(),startedAt:now.toISOString(),plannedMinutes:T,status:'active',prefs,coachLog:[],items:buildPlan(T,prefs)};
+  S.prefs={date:today(),pin:[],skip:[],skills:[],request:''};savePrefs();S.coachMsg='';S.coachUndo=null;
   saveSession(true);render();window.scrollTo({top:0});
+  if(req&&S.sample)askCoach(req);
 }
 function sessionTouched(){return S.session&&S.session.items.some(i=>i.done||i.elapsedSec>5)}
-function shuffle(){if(!S.session||sessionTouched())return;stopTimer();S.session.items=buildPlan(S.session.plannedMinutes);saveSession(true);render()}
+function shuffle(){if(!S.session||sessionTouched())return;stopTimer();S.session.items=buildPlan(S.session.plannedMinutes,S.session.prefs);S.coachUndo=null;saveSession(true);render()}
 function discardSession(){if(!S.session)return;stopTimer();const id=S.session.id;S.session=null;S.sessions=S.sessions.filter(s=>s.id!==id);del('sessions/'+id);render()}
-function finishSession(){if(!S.session)return;stopTimer();S.session.status='done';S.session.finishedAt=new Date().toISOString();saveSession(true);S.lastFinished=clone(S.session);S.sessions=[S.lastFinished,...S.sessions.filter(x=>x.id!==S.session.id)];S.session=null;render()}
+function finishSession(){if(!S.session)return;stopTimer();if(coachCtl)coachCtl.abort();S.session.items.forEach(i=>{if(!i.done&&(i.note||'').trim())syncNote(i)});S.swapKey=null;S.noteOpen.clear();S.session.status='done';S.session.finishedAt=new Date().toISOString();saveSession(true);S.lastFinished=clone(S.session);S.sessions=[S.lastFinished,...S.sessions.filter(x=>x.id!==S.session.id)];S.session=null;render()}
 function findItem(k){return S.session&&S.session.items.find(i=>i.key===k)}
 
 let tick=null;
@@ -457,9 +534,150 @@ function completeItem(k){
       if(it.block==='maint'||s.stage==='maintenance'){patch.lastReview=d;patch.reviewInterval=(it.clean||0)>=4?Math.min((s.reviewInterval||2)*2,30):2}
       patchSong(s.id,patch)}
   } else if(it.kind==='drill'&&it.refId){patchDrill(it.refId,{lastDone:d})}
+  syncNote(it);S.noteOpen.delete(k);if(S.swapKey===k)S.swapKey=null;
   saveSession(true);render();
 }
 function undoItem(k){const it=findItem(k);if(!it)return;it.done=false;saveSession(true);render()}
+
+/* ---------- practice notes (saved per item, kept as a dated log) ---------- */
+function syncNote(it){
+  if(!S.session||!it.refId)return;const id=S.session.id+'_'+it.key;const text=(it.note||'').trim();
+  if(!text){if(it.noteSaved){it.noteSaved=false;S.notes=S.notes.filter(n=>n.id!==id);del('notes/'+id)}return}
+  const doc={refId:it.refId,kind:it.kind==='prompt'?'song':it.kind,title:it.title,block:it.block,part:(it.part||'').trim(),text,
+    bpm:it.bpm||null,clean:it.clean||null,date:S.session.date,sessionId:S.session.id,createdAt:new Date().toISOString()};
+  it.noteSaved=true;S.notes=[{id,...doc},...S.notes.filter(n=>n.id!==id)];save('notes/'+id,doc);
+}
+function addManualNote(refId,kind,title,part,text){
+  text=text.trim();if(!text)return;const id='m-'+Date.now().toString(36);
+  const doc={refId,kind,title,block:null,part:part.trim(),text,bpm:null,clean:null,date:today(),sessionId:null,createdAt:new Date().toISOString()};
+  S.notes=[{id,...doc},...S.notes];save('notes/'+id,doc);
+}
+
+/* ---------- changing the plan: swap, remove ---------- */
+function swapOptions(it){
+  const songs=S.songs.filter(s=>!s.archived);const drills=S.drills.filter(activeDrill);
+  const inPlan=new Set(S.session.items.filter(i=>!i.done&&i.kind!=='prompt').map(i=>i.refId));
+  const fit={stretch:s=>s.stage==='learning',polish:s=>['stitching','tempo','ready'].includes(s.stage),maint:s=>s.stage==='maintenance'}[it.block];
+  const sugSongs=fit?songs.filter(fit):it.block==='weak'?songs.filter(s=>(s.skills||[]).some(k=>(it.skills||[]).includes(k))):[];
+  const sugDrills=it.block==='warmup'?drills.filter(d=>d.warmup):it.block==='weak'?drills.filter(d=>(d.skills||[]).some(k=>(it.skills||[]).includes(k))||isNewTech(d)):[];
+  const opt=(k,x)=>`<option value="${k}:${esc(x.id)}">${esc(x.title)}${k==='song'?' · '+(STAGE_L[x.stage]||''):''}${inPlan.has(x.id)?' (in plan)':''}</option>`;
+  const sug=[...sugSongs.map(s=>opt('song',s)),...sugDrills.map(d=>opt('drill',d))].filter((_,i)=>true);
+  return `<option value="">Swap for…</option>${sug.length?`<optgroup label="Fits this slot">${sug.join('')}</optgroup>`:''}
+    <optgroup label="All songs">${songs.sort((a,b)=>a.title.localeCompare(b.title)).map(s=>opt('song',s)).join('')}</optgroup>
+    <optgroup label="All drills">${drills.sort((a,b)=>a.title.localeCompare(b.title)).map(d=>opt('drill',d)).join('')}</optgroup>`;
+}
+function replaceItem(k,val){
+  const it=findItem(k);if(!it||!val)return;const [kind,id]=[val.slice(0,val.indexOf(':')),val.slice(val.indexOf(':')+1)];
+  const src=kind==='song'?S.songs.find(s=>s.id===id):S.drills.find(d=>d.id===id);if(!src)return;
+  if(S.running===k)stopTimer();
+  let n=kind==='song'?songItem(src):drillItem(src);
+  if(kind==='song'&&it.focusSkill){const sk=S.skills.find(s=>s.name===it.focusSkill);n=songItem(src,{task:`Play ${src.title} with all your attention on ${it.focusSkill.toLowerCase()}: ${SKILL_CUES[sk&&sk.id]||'focus on this one skill'}.`,skills:sk?[sk.id]:src.skills||[]});n.focusSkill=it.focusSkill}
+  const idx=S.session.items.indexOf(it);
+  S.session.items[idx]={...n,block:it.block,minutes:it.minutes,key:it.key+'s',done:false,elapsedSec:0,actualMinutes:null,bpm:null,clean:null,note:it.note||'',part:it.part||''};
+  S.swapKey=null;saveSession(true);render();toast('Swapped in '+src.title);
+}
+function removeItem(k){
+  const s=S.session;const it=findItem(k);if(!it)return;if(S.running===k)stopTimer();
+  const rest=s.items.filter(i=>i!==it&&!i.done);
+  if(!rest.length){toast('Keep at least one item');return}
+  let m=it.minutes;s.items=s.items.filter(i=>i!==it);
+  for(let i=0;m>0;i=(i+1)%rest.length,m--)rest[i].minutes++;
+  S.swapKey=null;saveSession(true);render();toast('Removed '+it.title+'; its minutes went to the rest');
+}
+
+/* ---------- the coach: Claude edits the remaining plan from your request ---------- */
+function neglected(){
+  const out=[];
+  for(const s of S.songs.filter(x=>!x.archived)){
+    if(s.stage==='maintenance'){const over=daysSince(s.lastReview||s.lastPracticed)-(s.reviewInterval||2);if(over>=3)out.push({type:'song',id:s.id,days:daysSince(s.lastReview||s.lastPracticed),text:`${s.title} is ${over} days overdue for a review`,w:over})}
+    else{const d=daysSince(s.lastPracticed);if(d>=5)out.push({type:'song',id:s.id,days:d,text:d>=999?`${s.title} hasn't been practised in Fretwork yet`:`${s.title}: last played ${d} days ago`,w:Math.min(d,30)})}
+  }
+  const m7=skillMinutes(7);const tot=Object.values(m7).reduce((a,b)=>a+b,0);const W=S.skills.reduce((a,s)=>a+(s.focus?1.3:1),0)||1;
+  if(tot>=45)for(const sk of S.skills){const share=tot*(sk.focus?1.3:1)/W;const v=m7[sk.id]||0;if(v<share*.5)out.push({type:'skill',id:sk.id,text:`${sk.name}: ${Math.round(v)}m this week (even share ≈ ${Math.round(share)}m)`,w:(share-v)/3+(sk.focus?5:0)})}
+  return out.sort((a,b)=>b.w-a.w).slice(0,5);
+}
+function coachContext(){
+  const s=S.session;const doneMin=s.items.filter(i=>i.done).reduce((a,i)=>a+itemMins(i),0);
+  const rest=s.items.filter(i=>!i.done);const R=rest.reduce((a,i)=>a+i.minutes,0);
+  const m7=skillMinutes(7),m28=skillMinutes(28);
+  return {R,ctx:{
+    remainingMinutes:R,alreadyDoneThisSession:s.items.filter(i=>i.done).map(i=>`${i.title} (${itemMins(i)}m)`),doneTodayMinutes:todayDone(s.id).total+doneMin,
+    currentPlan:rest.map(i=>({block:i.block,kind:i.kind,refId:i.refId,title:i.title,minutes:i.minutes,task:i.task})),
+    blocks:BLOCKS.map(b=>`${b.k} = ${b.l}`),
+    songs:S.songs.filter(x=>!x.archived).map(x=>({id:x.id,title:x.title,artist:x.artist,stage:STAGE_L[x.stage],skills:x.skills,daysSinceLastPlayed:daysSince(x.lastPracticed)>=999?'never':daysSince(x.lastPracticed),currentBpm:x.currentBpm,targetBpm:x.targetBpm,lessonNote:lessonActive(x)?x.lessonNote:undefined})),
+    drills:S.drills.filter(activeDrill).map(d=>({id:d.id,title:d.title,skills:d.skills,warmup:!!d.warmup,daysSinceLastDone:daysSince(d.lastDone)>=999?'never':daysSince(d.lastDone),newTechnique:isNewTech(d)||undefined})),
+    skills:S.skills.map(k=>({id:k.id,name:k.name,focus:!!k.focus,minutesLast7Days:Math.round(m7[k.id]||0),minutesLast28Days:Math.round(m28[k.id]||0)})),
+    neglected:neglected().map(n=>n.text),
+    recentPracticeNotes:S.notes.slice(0,8).map(n=>`${n.date} ${n.title}${n.part?' ['+n.part+']':''}: ${String(n.text).slice(0,200)}`)
+  }};
+}
+let coachCtl=null;
+async function askCoach(request){
+  request=String(request||'').trim();if(!request||!S.session||!S.sample||S.coachBusy)return;
+  const {R,ctx}=coachContext();if(R<5){toast('Not enough time left in this session to change');return}
+  const prompt=`You are a guitar teacher adjusting the rest of today's practice session for your student. The student has the final say: do what they ask. If their request leaves out something that has been neglected (see "neglected"), you may mention it in one short sentence and, only if it fits without going against the request, bake a little of it in.
+
+Student: advanced beginner, fingerstyle and rhythm, learning songs to feed their own songwriting. Weak spots: consistent rhythm, playing by ear, melody with chords. They are known to stall at about 80% of a song, so polish work should end with a non-stop run-through.
+
+The student's request: """${request.slice(0,1000)}"""
+
+Data (JSON):
+${JSON.stringify(ctx)}
+
+Rules:
+- Rebuild only the remaining part of the session. The items' minutes must add up to exactly ${R}.
+- Use only song and drill ids from the data (refId). For anything else (e.g. songwriting, listening, free play) use kind "prompt" with refId null and a short title.
+- block must be one of: warmup, stretch, polish, weak, maint, harvest. Keep items 5 minutes or longer, and no more than 8 items.
+- Keep warm-up first if there is one. Mix items; don't put one song in twice.
+- task: one or two plain sentences telling them exactly what to do in that slot. Leave task empty to keep the app's default task for that song or drill.
+- message: two or three short sentences to the student saying what you changed and why, in plain words.
+
+Reply with only this JSON:
+{"message":"...","items":[{"block":"polish","kind":"song","refId":"blackbird","title":"","task":"","minutes":12}]}`;
+  coachCtl=new AbortController();S.coachBusy=request;S.coachMsg='';render();
+  try{
+    const out=await S.sample.json(prompt,{signal:coachCtl.signal,cache:false});
+    applyCoach(out,R,request);
+  }catch(e){
+    const c=e&&e.code;
+    if(c==='not_granted'||c==='sampling_disabled'||c==='capability_disabled'||c==='not_declared'){S.sample=null;S.coachMsg='The coach needs permission to use Claude. You can still swap and remove items yourself.'}
+    else if(c==='cancelled')S.coachMsg='';
+    else if(c==='rate_limited')S.coachMsg='The coach is busy or you hit a usage limit. Try again in a bit.';
+    else if(c==='invalid_json')S.coachMsg='The coach answered in a way the app couldn’t read. Try asking again, a bit more simply.';
+    else S.coachMsg='Couldn’t reach the coach. Try again.';
+  }finally{S.coachBusy=null;coachCtl=null;render()}
+}
+function applyCoach(out,R,request){
+  const s=S.session;if(!s||!out||!Array.isArray(out.items))throw {code:'invalid_json'};
+  const items=[];
+  for(const x of out.items.slice(0,8)){
+    const block=BLOCKS.some(b=>b.k===x.block)?x.block:'polish';let mins=Math.max(1,Math.round(+x.minutes||0));
+    let it=null;
+    if(x.kind==='song'){const so=S.songs.find(q=>q.id===x.refId);if(so)it=songItem(so)}
+    else if(x.kind==='drill'){const d=S.drills.find(q=>q.id===x.refId);if(d)it=drillItem(d)}
+    else if(x.title||x.task)it={kind:'prompt',refId:null,title:String(x.title||'Free practice').slice(0,80),sub:'Coach',skills:[],task:'',hasBpm:false};
+    if(!it)continue;
+    if(x.task&&String(x.task).trim())it.task=String(x.task).trim().slice(0,400);
+    if(!it.task)it.task='Your choice: play with full attention, and note what you notice.';
+    items.push({...it,block,minutes:mins});
+  }
+  if(!items.length)throw {code:'invalid_json'};
+  // make minutes add up to R exactly
+  let sum=items.reduce((a,i)=>a+i.minutes,0);
+  if(sum!==R){const f=R/sum;items.forEach(i=>i.minutes=Math.max(1,Math.floor(i.minutes*f)));sum=items.reduce((a,i)=>a+i.minutes,0);
+    for(let i=0;sum<R;i=(i+1)%items.length,sum++)items[i].minutes++;
+    for(let i=0,g=0;sum>R&&g<1000;i=(i+1)%items.length,g++){if(items[i].minutes>1){items[i].minutes--;sum--}}}
+  const stamp=Date.now().toString(36);
+  S.coachUndo=clone(s.items);
+  const done=s.items.filter(i=>i.done);
+  s.items=[...done,...items.map((it,i)=>({...it,key:stamp+'c'+i,done:false,elapsedSec:0,actualMinutes:null,bpm:null,clean:null}))];
+  if(S.running)stopTimer();
+  S.coachMsg=String(out.message||'Plan updated.').slice(0,700);
+  (s.coachLog=s.coachLog||[]).push({at:new Date().toISOString(),request:request.slice(0,500),message:S.coachMsg});
+  saveSession(true);
+}
+function undoCoach(){if(!S.session||!S.coachUndo)return;stopTimer();const done=new Set(S.session.items.filter(i=>i.done).map(i=>i.key));
+  S.session.items=[...S.session.items.filter(i=>i.done),...S.coachUndo.filter(i=>!i.done&&!done.has(i.key))];S.coachUndo=null;S.coachMsg='Back to the plan you had before.';saveSession(true);render()}
 
 /* ---------- board actions ---------- */
 function moveStage(id,dir){
@@ -512,7 +730,27 @@ function viewToday(){
         <div class="chips">${behind.map(s=>`<span class="chip${s.focus?' focus':''}">${esc(s.name)} · ${Math.round(sm[s.id]||0)}m</span>`).join('')||'<span class="muted">No skills yet</span>'}</div></div>
       ${learning<2?`<div class="banner">Only ${learning} song${learning===1?'':'s'} in Learning. <a href="#" data-act="tab" data-tab="discover" style="color:inherit">Pick something new in Discover</a> so you don't run out of material.</div>`:''}
     </div>
-  </div></section>`;
+  </div>${coachPanel()}</section>`;
+}
+function refName(id){const s=S.songs.find(x=>x.id===id);if(s)return s.title;const d=S.drills.find(x=>x.id===id);return d?d.title:id}
+function coachPanel(){
+  const p=S.prefs;const rem=neglected();const pin=new Set(p.pin),skip=new Set(p.skip),sk=new Set(p.skills);
+  const songs=S.songs.filter(s=>!s.archived).sort((a,b)=>a.title.localeCompare(b.title));const drills=S.drills.filter(activeDrill).sort((a,b)=>a.title.localeCompare(b.title));
+  const opts=ex=>`<optgroup label="Songs">${songs.filter(s=>!ex.has(s.id)).map(s=>`<option value="${esc(s.id)}">${esc(s.title)}</option>`).join('')}</optgroup><optgroup label="Drills">${drills.filter(d=>!ex.has(d.id)).map(d=>`<option value="${esc(d.id)}">${esc(d.title)}</option>`).join('')}</optgroup>`;
+  const ex=new Set([...pin,...skip]);
+  return `<div class="panel coach">
+    <div><div class="eyebrow">Coach</div><h2 style="margin-top:4px">Want to steer today?</h2><p class="muted" style="margin:4px 0 0;font-size:14px;max-width:70ch">Optional. Set this before you pick a time and the plan follows it. You can still swap or remove anything once the plan is up.</p></div>
+    ${rem.length?`<div><div class="muted" style="font-size:13px;margin-bottom:6px">Haven't had much attention lately</div><div class="rems">${rem.map(r=>{const on=r.type==='song'?pin.has(r.id):sk.has(r.id);
+      return `<div class="rem${on?' on':''}"><span>${esc(r.text)}</span><button class="btn small${on?' primary':''}" data-act="${r.type==='song'?'pin':'pskill'}" data-id="${esc(r.id)}">${on?'✓ In today':(r.type==='song'?'Include today':'Focus today')}</button></div>`}).join('')}</div></div>`:''}
+    <div class="row" style="gap:16px;align-items:flex-start">
+      <label class="f" style="flex:1;min-width:200px">Make sure today includes<select data-act="pinsel"><option value="">Choose a song or drill…</option>${opts(ex)}</select></label>
+      <label class="f" style="flex:1;min-width:200px">Skip today<select data-act="skipsel"><option value="">Choose a song or drill…</option>${opts(ex)}</select></label>
+    </div>
+    ${pin.size||skip.size?`<div class="pinchips">${[...pin].map(id=>`<span class="pinchip">Include: ${esc(refName(id))}<button data-act="unpin" data-id="${esc(id)}" aria-label="Remove">×</button></span>`).join('')}${[...skip].map(id=>`<span class="pinchip skip">Skip: ${esc(refName(id))}<button data-act="unskip" data-id="${esc(id)}" aria-label="Remove">×</button></span>`).join('')}</div>`:''}
+    <div><div class="muted" style="font-size:13px;margin-bottom:6px">Skills to focus on today</div><div class="skilltoggles">${S.skills.map(k=>`<button data-act="pskill" data-id="${esc(k.id)}" aria-pressed="${sk.has(k.id)}">${esc(k.name)}</button>`).join('')}</div></div>
+    ${S.sample?`<label class="f">Or tell the coach in your own words<textarea id="coachreq" data-pref="request" placeholder="e.g. My lesson is tomorrow, so mostly Hey Hey. Lighter on drills, and give me 10 minutes to mess around with a riff idea.">${esc(p.request)}</textarea></label>`
+      :`<p class="muted" style="font-size:13px;margin:0">Typing a request for the coach works when Fretwork is open on claude.ai and allowed to use Claude.</p>`}
+  </div>`;
 }
 function viewSession(){
   const s=S.session;const doneMin=s.items.reduce((a,i)=>a+itemMins(i),0);const pct=Math.min(100,doneMin/s.plannedMinutes*100);
@@ -523,22 +761,41 @@ function viewSession(){
     <div class="meter" role="progressbar" aria-valuenow="${Math.round(pct)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
     <div class="row">${touched?'':`<button class="btn" data-act="shuffle">Shuffle plan</button><button class="btn ghost" data-act="discard">Change time</button>`}<button class="btn primary" data-act="finish">Finish session</button></div>
   </div>
+  ${coachBar()}
   <div class="items">${s.items.map(itemHtml).join('')}</div>
   <p class="muted" style="font-size:13px;margin:0">Order follows research on practice: hardest new material while you're fresh, a mix of items (interleaving) rather than one long block, and a non-stop run-through at the end of polish items so you practise playing songs all the way through.</p>
   </section>`;
 }
+function coachBar(){
+  const s=S.session;const left=s.items.filter(i=>!i.done).reduce((a,i)=>a+i.minutes,0);
+  const pre=(s.prefs&&((s.prefs.pin||[]).length||(s.prefs.skip||[]).length||(s.prefs.skills||[]).length))?`<p class="muted" style="font-size:13px;margin:0">Built with your requests: ${[...(s.prefs.pin||[]).map(id=>'include '+refName(id)),...(s.prefs.skip||[]).map(id=>'skip '+refName(id)),...(s.prefs.skills||[]).map(id=>'focus on '+((S.skills.find(k=>k.id===id)||{}).name||id))].map(esc).join(', ')}.</p>`:'';
+  if(!S.sample&&!S.coachMsg)return pre?`<div class="panel coach">${pre}<p class="muted" style="font-size:13px;margin:0">Use Swap or Remove on any item to change the plan.</p></div>`:'';
+  return `<div class="panel coach">
+    <div class="eyebrow">Coach · ${left} minutes left to plan</div>
+    ${pre}
+    ${S.coachBusy?`<div class="coachmsg">Rethinking the plan for “${esc(S.coachBusy.slice(0,120))}”… <button class="btn ghost small" data-act="coachstop">Stop</button></div>`:''}
+    ${S.coachMsg&&!S.coachBusy?`<div class="coachmsg">${esc(S.coachMsg)}</div>`:''}
+    ${S.sample?`<form class="coachbar" data-act="coachask"><textarea id="coachnow" aria-label="Ask the coach to change the plan" placeholder="Change something: “swap Signe for Wristwatch”, “more ear training”, “I only have 20 minutes left”…" ${S.coachBusy?'disabled':''}></textarea><button class="btn primary" type="submit" ${S.coachBusy||left<5?'disabled':''}>Ask coach</button>${S.coachUndo?`<button class="btn ghost" type="button" data-act="coachundo">Undo coach changes</button>`:''}</form>`:''}
+  </div>`;
+}
+function coverImg(id,cls){const s=S.songs.find(x=>x.id===id);return s&&s.cover?`<img class="cover ${cls||''}" src="${esc(s.cover)}" alt="" loading="lazy">`:''}
 function itemHtml(it){
   const run=S.running===it.key;
-  const titleLink=it.kind==='song'||(it.kind==='prompt'&&it.link==='song')?`<a data-act="opensong" data-id="${esc(it.refId)}">${esc(it.title)}</a>`:it.link==='discover'?`<a data-act="tab" data-tab="discover">${esc(it.title)}</a>`:esc(it.title);
+  const titleLink=it.kind==='song'||(it.kind==='prompt'&&it.link==='song')?`<a data-act="opensong" data-id="${esc(it.refId)}">${esc(it.title)}</a>`:it.kind==='drill'?`<a data-act="opendrill" data-id="${esc(it.refId)}">${esc(it.title)}</a>`:it.link==='discover'?`<a data-act="tab" data-tab="discover">${esc(it.title)}</a>`:esc(it.title);
   const sub=it.focusSkill?`<span class="chip focus">${esc(it.focusSkill)}</span>`:(it.sub?`<span class="muted" style="font-weight:400;font-size:14px">${esc(it.sub)}</span>`:'');
+  const cov=it.kind==='song'?coverImg(it.refId,'sm'):'';
   if(it.done){
     return `<div class="item done b-${it.block}"><div class="blk"><span class="lbl">${BLOCK_L[it.block]}</span><span class="mins">${it.actualMinutes??it.minutes}m</span></div>
-    <div><div class="ititle">✓ ${titleLink} ${sub}</div><div class="row" style="justify-content:space-between;margin-top:4px"><span class="logged">${[it.bpm?it.bpm+' BPM':'',it.clean?'clean '+it.clean+'/5':''].filter(Boolean).join(' · ')||'Logged'}</span><button class="btn ghost small" data-act="undo" data-k="${it.key}">Undo</button></div></div></div>`;
+    <div><div class="ititle">${cov}✓ ${titleLink} ${sub}</div><div class="row" style="justify-content:space-between;margin-top:4px"><span class="logged">${[it.bpm?it.bpm+' BPM':'',it.clean?'clean '+it.clean+'/5':''].filter(Boolean).join(' · ')||'Logged'}</span><button class="btn ghost small" data-act="undo" data-k="${it.key}">Undo</button></div>
+    ${it.note?`<div class="donenote">${it.part?`<b>${esc(it.part)}:</b> `:''}${esc(it.note)}</div>`:''}</div></div>`;
   }
+  const canNote=!!it.refId;const noteOpen=S.noteOpen.has(it.key)||!!it.note;
+  const extra=`${canNote&&noteOpen?`<div class="notebox"><input data-field="part" data-k="${it.key}" id="part-${it.key}" value="${esc(it.part||'')}" placeholder="Part (e.g. intro, bar 9)" aria-label="Which part"><textarea data-field="note" data-k="${it.key}" id="note-${it.key}" placeholder="How did it feel? What should you focus on next time?" aria-label="Practice note">${esc(it.note||'')}</textarea></div>`:''}
+    ${S.swapKey===it.key?`<div class="swap"><select data-act="swapsel" data-k="${it.key}" aria-label="Swap this item">${swapOptions(it)}</select><button class="btn ghost small danger" data-act="remove" data-k="${it.key}">Remove from plan</button><button class="btn ghost small" data-act="swap" data-k="${it.key}">Cancel</button></div>`:''}`;
   return `<div class="item b-${it.block}${run?' running':''}">
     <div class="blk"><span class="lbl">${BLOCK_L[it.block]}</span><span class="mins">${it.minutes}m</span></div>
     <div>
-      <div class="ititle">${titleLink} ${sub}</div>
+      <div class="ititle">${cov}${titleLink} ${sub}</div>
       <p class="task">${esc(it.task)}</p>
       ${it.lessonNote?`<div class="lesson"><b>From your lesson:</b> ${esc(it.lessonNote)}</div>`:''}
       <div class="ctrl">
@@ -547,8 +804,11 @@ function itemHtml(it){
         ${it.hasBpm?`<label class="row" style="gap:6px"><span class="muted" style="font-size:13px">Clean BPM</span><input class="bpm" id="bpm-${it.key}" type="number" min="30" max="300" inputmode="numeric" data-field="bpm" data-k="${it.key}" value="${it.bpm??''}"></label>`:''}
         ${it.kind!=='prompt'?`<span class="row" style="gap:6px"><span class="muted" style="font-size:13px">How clean</span><span class="clean" role="group" aria-label="How clean, 1 to 5">${[1,2,3,4,5].map(n=>`<button data-act="clean" data-k="${it.key}" data-n="${n}" aria-pressed="${it.clean===n}">${n}</button>`).join('')}</span></span>`:''}
         <span class="spacer"></span>
+        ${canNote&&!noteOpen?`<button class="btn ghost small" data-act="noteopen" data-k="${it.key}">Add note</button>`:''}
+        ${S.swapKey!==it.key?`<button class="btn ghost small" data-act="swap" data-k="${it.key}">Swap</button>`:''}
         <button class="btn primary" data-act="done" data-k="${it.key}">Done</button>
       </div>
+      ${extra}
     </div></div>`;
 }
 
@@ -563,7 +823,7 @@ function viewSongs(){
 function cardHtml(s){
   const i=STAGES.findIndex(x=>x.k===s.stage);const pct=s.targetBpm&&s.currentBpm?Math.min(100,s.currentBpm/s.targetBpm*100):0;
   return `<div class="card" role="button" tabindex="0" data-act="opensong" data-id="${esc(s.id)}">
-    <div><div class="t">${esc(s.title)}</div><div class="a">${esc(s.artist)}</div></div>
+    <div class="head">${s.cover?`<img class="cover" src="${esc(s.cover)}" alt="" loading="lazy">`:''}<div><div class="t">${esc(s.title)}</div><div class="a">${esc(s.artist)}</div></div></div>
     ${chipsFor(s.skills)}
     ${s.targetBpm?`<div class="bpmbar"><div class="track"><i style="width:${pct}%"></i></div><span>${s.currentBpm??'–'}/${s.targetBpm}</span></div>`:(s.currentBpm?`<div class="bpmbar"><span>${s.currentBpm} BPM</span></div>`:'')}
     ${lessonActive(s)?`<span class="chip focus">Lesson focus</span>`:''}
@@ -582,7 +842,18 @@ function viewDiscover(){
   ${live.length?`<div class="tiers">${tiers.map(([k,l,h])=>{const list=live.filter(s=>s.tier===k).sort((a,b)=>score2(b,ranked)-score2(a,ranked));
     return `<div class="col"><div class="colhead"><h3><span>${l}</span><span class="mono muted">${list.length}</span></h3><p>${h}</p></div>${list.map(sugHtml).join('')||'<div class="empty" style="padding:16px;font-size:13px">None right now</div>'}</div>`}).join('')}</div>`
   :`<div class="empty">No suggestions yet. Give Claude a playlist export and it will fill this page.</div>`}
+  ${techSection(ranked)}
   </section>`;
+}
+function linksHtml(d){const l=(d.links||[]).filter(x=>x&&/^https:\/\//.test(x.url));return l.length?`<div class="links">${l.map(x=>`<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.label||'Learn how')} ↗</a>`).join('')}</div>`:''}
+function techSection(ranked){
+  const lib=S.drills.filter(d=>d.status==='library').sort((a,b)=>score2(b,ranked)-score2(a,ranked)||a.title.localeCompare(b.title));
+  const act=S.drills.filter(activeDrill).sort((a,b)=>(isNewTech(b)?1:0)-(isNewTech(a)?1:0)||a.title.localeCompare(b.title));
+  return `<div><h2>New techniques</h2><p class="muted" style="margin:4px 0 0;max-width:72ch;font-size:14px">Teachers and practice research agree that mixing several techniques beats pushing one drill to ever-higher speeds (variable practice builds skill that transfers). Each one links to a lesson that shows how. When you start one, it gets a slot in your Skill focus block for the next three weeks.</p></div>
+  ${lib.length?`<div class="techs">${lib.map(d=>`<div class="sug"><div class="t" style="font-weight:600">${esc(d.title)}</div>${chipsFor(d.skills)}${d.why?`<p>${esc(d.why)}</p>`:''}${linksHtml(d)}
+    <div class="row"><button class="btn primary small" data-act="techstart" data-id="${esc(d.id)}">Start learning</button><button class="btn ghost small" data-act="techskip" data-id="${esc(d.id)}">Not now</button></div></div>`).join('')}</div>`
+    :`<div class="empty">No new techniques waiting. Ask Claude to suggest some for your weak spots.</div>`}
+  <div><h3>In your rotation</h3><div class="chips" style="margin-top:8px">${act.map(d=>`<button class="chip${isNewTech(d)?' focus':''}" style="border:0;cursor:pointer" data-act="opendrill" data-id="${esc(d.id)}">${esc(d.title)}${isNewTech(d)?' · new':''}</button>`).join('')}</div></div>`;
 }
 function score2(s,ranked){return (s.skills||[]).filter(k=>ranked.includes(k)).length}
 function sugHtml(s){return `<div class="sug"><div><div class="t" style="font-weight:600">${esc(s.title)}</div><div class="muted" style="font-size:13px">${esc(s.artist)}</div></div>
@@ -655,7 +926,8 @@ function openSong(id){
   const dlg=$('#dlg');
   const mins=songMinutes(id);
   dlg.innerHTML=`<div class="dlg">
-    <div class="row" style="justify-content:space-between;align-items:flex-start"><div><div class="eyebrow">${STAGE_L[s.stage]||''}</div><h2 style="margin-top:2px">${esc(s.title)}</h2><div class="muted">${esc(s.artist)}</div></div><button class="btn ghost" data-dact="close" aria-label="Close">Close</button></div>
+    <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap"><div class="row" style="flex-wrap:nowrap;align-items:flex-start;gap:14px">${s.cover?`<img class="cover lg" src="${esc(s.cover)}" alt="">`:''}<div><div class="eyebrow">${STAGE_L[s.stage]||''}</div><h2 style="margin-top:2px">${esc(s.title)}</h2><div class="muted">${esc(s.artist)}</div>
+      ${S.assets?`<label class="btn ghost small" style="margin-top:6px;margin-left:-10px">${s.cover?'Change cover':'Add cover image'}<input type="file" accept="image/*" id="d-cover" hidden></label>`:''}</div></div><button class="btn ghost" data-dact="close" aria-label="Close">Close</button></div>
     ${lessonActive(s)?`<div class="lesson"><b>From your lesson:</b> ${esc(s.lessonNote)}</div>`:''}
     <div class="fields">
       <label class="f">Title<input id="d-title" value="${esc(s.title)}"></label>
@@ -667,17 +939,68 @@ function openSong(id){
     <label class="f">What this song teaches<input id="d-teaches" value="${esc(s.teaches)}" placeholder="One line: the core skills you're building"></label>
     <label class="f notes">Ideas &amp; notes <span style="font-size:12px">· saved as you type</span><textarea id="d-notes" placeholder="Voicings, riff shapes, rhythm feels, progressions worth stealing for your own songs. Lesson tips. Where you got stuck.">${esc(s.notes)}</textarea></label>
     <div class="row muted" style="font-size:13px;gap:18px"><span>Practised: <span class="mono">${fmtMin(mins)}</span></span><span>Last: <span class="mono">${s.lastPracticed||'never'}</span></span>${s.stage==='maintenance'?`<span>Review every <span class="mono">${s.reviewInterval||2}</span> days</span>`:''}</div>
+    ${logSection(id)}
     <div class="row" style="justify-content:space-between"><button class="btn ghost danger" data-dact="delete" id="d-del">Delete song</button><button class="btn primary" data-dact="close">Done</button></div>
   </div>`;
-  dlg.dataset.id=id;
+  dlg.dataset.id=id;dlg.dataset.kind='song';S.logF={part:'',q:''};
   try{dlg.showModal()}catch(e){dlg.setAttribute('open','')}
 }
+/* ---------- practice log (inside song and drill dialogs) ---------- */
+function logSection(refId){
+  const ns=S.notes.filter(n=>n.refId===refId);const parts=[...new Set(ns.map(n=>n.part).filter(Boolean))].sort();
+  return `<div style="display:flex;flex-direction:column;gap:10px"><div class="row" style="justify-content:space-between"><h3>Practice log</h3><span class="muted" style="font-size:13px" id="logcount">${ns.length} note${ns.length===1?'':'s'}</span></div>
+    <div class="lognew"><input id="lg-part" placeholder="Part (optional)" aria-label="Which part" list="lg-parts"><datalist id="lg-parts">${parts.map(p=>`<option value="${esc(p)}">`).join('')}</datalist><textarea id="lg-text" placeholder="Add a note for today: how it felt, what to work on next time" aria-label="New log note"></textarea><button class="btn" data-dact="addnote">Add</button></div>
+    ${ns.length>3||parts.length?`<div class="logtools"><select id="lg-filter" aria-label="Filter by part"><option value="">All parts</option>${parts.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('')}</select><input id="lg-q" type="search" placeholder="Search notes" aria-label="Search notes"></div>`:''}
+    <div class="log" id="log">${logList(refId)}</div></div>`;
+}
+function logList(refId){
+  const f=S.logF;const q=f.q.toLowerCase();
+  const ns=S.notes.filter(n=>n.refId===refId&&(!f.part||n.part===f.part)&&(!q||String(n.text).toLowerCase().includes(q)||String(n.part||'').toLowerCase().includes(q)))
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.createdAt||'').localeCompare(a.createdAt||''));
+  if(!ns.length)return `<div class="muted" style="font-size:13px">${S.notes.some(n=>n.refId===refId)?'No notes match.':'No notes yet. Add one here, or with “Add note” on this item during practice.'}</div>`;
+  let out='',month='';
+  for(const n of ns){const d=new Date((n.date||today())+'T12:00');const mo=d.toLocaleDateString(undefined,{month:'long',year:'numeric'});
+    if(mo!==month){month=mo;out+=`<div class="logmonth">${esc(mo)}</div>`}
+    out+=`<div class="logent"><div class="meta"><span class="mono">${d.toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'})}</span>${n.part?`<span class="chip focus">${esc(n.part)}</span>`:''}${n.block?`<span>${esc(BLOCK_L[n.block]||'')}</span>`:''}${n.bpm?`<span class="mono">${n.bpm} BPM</span>`:''}${n.clean?`<span>clean ${n.clean}/5</span>`:''}<button class="btn ghost small" style="padding:0 6px;font-size:12px" data-dact="delnote" data-id="${esc(n.id)}">Delete</button></div><div class="txt">${esc(n.text)}</div></div>`}
+  return out;
+}
+function refreshLog(){const el=document.getElementById('log');const dlg=$('#dlg');if(el&&dlg.open){el.innerHTML=logList(dlg.dataset.id);const c=document.getElementById('logcount');if(c){const n=S.notes.filter(x=>x.refId===dlg.dataset.id).length;c.textContent=n+' note'+(n===1?'':'s')}}}
+
+/* ---------- drill dialog ---------- */
+function openDrill(id){
+  const d=S.drills.find(x=>x.id===id);if(!d)return;const dlg=$('#dlg');
+  let mins=0;for(const ses of allSessions())for(const it of ses.items||[])if(it.refId===id)mins+=itemMins(it);
+  dlg.innerHTML=`<div class="dlg">
+    <div class="row" style="justify-content:space-between;align-items:flex-start"><div><div class="eyebrow">${d.status==='library'?'Technique: not started':isNewTech(d)?'New technique':'Drill'}${d.warmup?' · warm-up':''}</div><h2 style="margin-top:2px">${esc(d.title)}</h2></div><button class="btn ghost" data-dact="close" aria-label="Close">Close</button></div>
+    ${lessonActive(d)?`<div class="lesson"><b>From your lesson:</b> ${esc(d.lessonNote)}</div>`:''}
+    ${chipsFor(d.skills)}
+    ${d.why?`<p style="margin:0">${esc(d.why)}</p>`:''}
+    ${linksHtml(d)}
+    <label class="f">How to practise it<textarea id="d-dtask" style="min-height:80px">${esc(d.task)}</textarea></label>
+    <div class="row muted" style="font-size:13px;gap:18px"><span>Practised: <span class="mono">${fmtMin(mins)}</span></span><span>Last: <span class="mono">${d.lastDone||'never'}</span></span></div>
+    ${logSection(id)}
+    <div class="row" style="justify-content:space-between">${d.status==='library'?`<button class="btn" data-dact="techstart">Start learning</button>`:`<button class="btn ghost danger" data-dact="retire">Take out of rotation</button>`}<button class="btn primary" data-dact="close">Done</button></div>
+  </div>`;
+  dlg.dataset.id=id;dlg.dataset.kind='drill';S.logF={part:'',q:''};
+  try{dlg.showModal()}catch(e){dlg.setAttribute('open','')}
+}
+function startTech(id){const d=S.drills.find(x=>x.id===id);if(!d)return;patchDrill(id,{status:'active',introducedAt:today()});toast(d.title+' is in your rotation');render()}
+
 let notesT;
 $('#dlg').addEventListener('input',e=>{
   const id=$('#dlg').dataset.id;if(e.target.id==='d-notes'){clearTimeout(notesT);const v=e.target.value;notesT=setTimeout(()=>patchSong(id,{notes:v}),700)}
+  if(e.target.id==='lg-q'){S.logF.q=e.target.value;refreshLog()}
 });
-$('#dlg').addEventListener('change',e=>{
-  const id=$('#dlg').dataset.id;const s=S.songs.find(x=>x.id===id);if(!s)return;const v=e.target.value;
+$('#dlg').addEventListener('change',async e=>{
+  const id=$('#dlg').dataset.id;const v=e.target.value;
+  if(e.target.id==='lg-filter'){S.logF.part=v;refreshLog();return}
+  if(e.target.id==='d-dtask'){patchDrill(id,{task:v.trim()});return}
+  if(e.target.id==='d-cover'&&e.target.files&&e.target.files[0]&&S.assets){
+    const f=e.target.files[0];if(f.size>8e6){toast('That image is too big (8 MB max)');return}
+    toast('Uploading cover…');
+    try{const a=await S.assets.upload(f);patchSong(id,{cover:a.url,coverAssetId:a.id});toast('Cover saved');openSong(id)}catch(err){console.warn(err);toast('Couldn’t upload that image')}
+    return}
+  const s=S.songs.find(x=>x.id===id);if(!s)return;
   const num=x=>x===''?null:Math.max(20,Math.min(320,Math.round(+x)));
   switch(e.target.id){
     case 'd-title':if(v.trim())patchSong(id,{title:v.trim()});break;
@@ -689,8 +1012,14 @@ $('#dlg').addEventListener('change',e=>{
   }
 });
 $('#dlg').addEventListener('click',e=>{
-  const b=e.target.closest('[data-dact]');if(!b)return;const id=$('#dlg').dataset.id;const s=S.songs.find(x=>x.id===id);
+  const b=e.target.closest('[data-dact]');if(!b)return;const id=$('#dlg').dataset.id;const kind=$('#dlg').dataset.kind;const s=kind==='song'?S.songs.find(x=>x.id===id):null;
   if(b.dataset.dact==='close'){closeDlg()}
+  else if(b.dataset.dact==='addnote'){const t=$('#lg-text');const p=$('#lg-part');if(!t.value.trim())return;
+    const ref=kind==='song'?s:S.drills.find(x=>x.id===id);addManualNote(id,kind,ref?ref.title:'',p.value,t.value);t.value='';p.value='';refreshLog();toast('Note saved')}
+  else if(b.dataset.dact==='delnote'){const nid=b.dataset.id;if(S.confirmDel!==nid){S.confirmDel=nid;b.textContent='Delete for good?';return}
+    S.notes=S.notes.filter(n=>n.id!==nid);del('notes/'+nid);S.confirmDel=null;refreshLog()}
+  else if(b.dataset.dact==='techstart'){startTech(id);openDrill(id)}
+  else if(b.dataset.dact==='retire'){patchDrill(id,{status:'retired'});closeDlg();toast('Taken out of rotation. Its log is kept.')}
   else if(b.dataset.dact==='skill'&&s){const on=b.getAttribute('aria-pressed')==='true';const sk=new Set(s.skills||[]);on?sk.delete(b.dataset.id):sk.add(b.dataset.id);b.setAttribute('aria-pressed',String(!on));patchSong(id,{skills:[...sk]})}
   else if(b.dataset.dact==='delete'&&s){
     if(S.confirmDel!==id){S.confirmDel=id;b.textContent='Click again to delete for good';return}
@@ -738,20 +1067,40 @@ $('#main').addEventListener('click',e=>{
     case 'adopt':{const s=S.suggestions.find(x=>x.id===b.dataset.id);if(!s)break;const id=newSong({title:s.title,artist:s.artist,stage:'learning',skills:s.skills,teaches:s.why,notes:s.ideas?('Ideas to steal: '+s.ideas):''});
       s.status='added';save('suggestions/'+s.id,{status:'added',songId:id},'update');toast(s.title+' added to Learning');render();break}
     case 'dismiss':{const s=S.suggestions.find(x=>x.id===b.dataset.id);if(!s)break;s.status='dismissed';save('suggestions/'+s.id,{status:'dismissed'},'update');render();break}
+    case 'opendrill':if(b.dataset.id)openDrill(b.dataset.id);break;
+    case 'noteopen':S.noteOpen.add(b.dataset.k);render();{const el=document.getElementById('note-'+b.dataset.k);if(el)el.focus()}break;
+    case 'swap':S.swapKey=S.swapKey===b.dataset.k?null:b.dataset.k;render();break;
+    case 'remove':removeItem(b.dataset.k);break;
+    case 'coachstop':if(coachCtl)coachCtl.abort();break;
+    case 'coachundo':undoCoach();break;
+    case 'pin':{const id=b.dataset.id;const p=S.prefs;p.pin=p.pin.includes(id)?p.pin.filter(x=>x!==id):[...p.pin,id];p.skip=p.skip.filter(x=>x!==id);savePrefs();render();break}
+    case 'unpin':S.prefs.pin=S.prefs.pin.filter(x=>x!==b.dataset.id);savePrefs();render();break;
+    case 'unskip':S.prefs.skip=S.prefs.skip.filter(x=>x!==b.dataset.id);savePrefs();render();break;
+    case 'pskill':{const id=b.dataset.id;const p=S.prefs;p.skills=p.skills.includes(id)?p.skills.filter(x=>x!==id):[...p.skills,id];savePrefs();render();break}
+    case 'techstart':startTech(b.dataset.id);break;
+    case 'techskip':patchDrill(b.dataset.id,{status:'skipped'});render();break;
   }
 });
 $('#main').addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.classList.contains('card')){e.preventDefault();openSong(e.target.dataset.id)}});
 $('#main').addEventListener('input',e=>{
+  if(e.target.dataset.pref==='request'){S.prefs.request=e.target.value;savePrefs();return}
   const f=e.target.dataset.field;if(!f)return;const it=findItem(e.target.dataset.k);if(!it)return;
   if(f==='bpm'){const v=e.target.value;it.bpm=v===''?null:Math.max(20,Math.min(320,Math.round(+v)));saveSession()}
+  if(f==='note'){it.note=e.target.value.slice(0,4000);saveSession()}
+  if(f==='part'){it.part=e.target.value.slice(0,60);saveSession()}
 });
 $('#main').addEventListener('change',e=>{
   const a=e.target.dataset.act;
+  if(a==='swapsel'&&e.target.value){replaceItem(e.target.dataset.k,e.target.value);return}
+  if((a==='pinsel'||a==='skipsel')&&e.target.value){const id=e.target.value;const p=S.prefs;
+    if(a==='pinsel'){p.pin=[...new Set([...p.pin,id])];p.skip=p.skip.filter(x=>x!==id)}else{p.skip=[...new Set([...p.skip,id])];p.pin=p.pin.filter(x=>x!==id)}
+    savePrefs();e.target.blur();render();return}
   if(a==='bpmsel'){S.bpmSong=e.target.value;render()}
   if(a==='focus'){const s=S.skills.find(x=>x.id===e.target.dataset.id);if(s){s.focus=e.target.checked;save('skills/'+s.id,{focus:s.focus},'update')}}
 });
 $('#main').addEventListener('submit',e=>{
   e.preventDefault();const a=e.target.dataset.act;
+  if(a==='coachask'){const t=$('#coachnow');const v=t&&t.value.trim();if(v){t.blur();askCoach(v)}return}
   if(a==='custom'){const v=+$('#cmin').value;if(v>=10){S.lastFinished=null;startSession(v)}else toast('Enter at least 10 minutes')}
   if(a==='addskill'){const n=$('#newskill').value.trim();if(!n)return;const id=slug(n).replace(/-/g,'_');if(S.skills.some(s=>s.id===id)){toast('That skill already exists');return}
     const doc={name:n,order:S.skills.length+1,focus:false,description:''};S.skills.push({id,...doc});save('skills/'+id,doc);$('#newskill').value='';toast('Added '+n);render()}
@@ -759,5 +1108,5 @@ $('#main').addEventListener('submit',e=>{
 });
 window.addEventListener('beforeunload',()=>{if(S.running){stopTimer()}});
 
-render();setStatus();initDb();
+render();setStatus();initDb();initExtras();
 </script>
