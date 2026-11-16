@@ -70,6 +70,8 @@ One doc per practice session (id `YYYY-MM-DD-HHMM`).
   "coachLog": [{ "at": "ISO", "request": "what the user asked the in-app coach", "message": "what it changed" }]
 }
 ```
+Practice logged by hand (Log practice) is a session with `"manual": true`, `status: "done"` and one done item. Its `block` comes from the song's stage or the drill type, or `free` for anything else. It counts toward minutes, skill balance and streaks like any session.
+
 `prefs` = what the user asked for before the plan was built; `coachLog` = requests to the in-app coach. Both are useful in weekly reviews (what the user keeps steering toward or away from).
 Skill minutes = each done item's `actualMinutes` (or `minutes`) split evenly across its `skills`.
 

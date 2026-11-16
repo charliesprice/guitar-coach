@@ -94,7 +94,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 .blk .lbl{font:600 11px var(--f-body);letter-spacing:.08em;text-transform:uppercase}
 .blk .mins{font:500 22px var(--f-mono)}
 .b-warmup .lbl{color:var(--slate)} .b-stretch .lbl{color:var(--brass)} .b-polish .lbl{color:var(--accent)}
-.b-weak .lbl{color:var(--warn)} .b-maint .lbl{color:var(--muted)} .b-harvest .lbl{color:var(--good)}
+.b-weak .lbl{color:var(--warn)} .b-maint .lbl{color:var(--muted)} .b-harvest .lbl{color:var(--good)} .b-free .lbl{color:var(--slate)}
 .ititle{font-weight:600;font-size:16px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .ititle a{color:inherit;text-decoration:none;border-bottom:1px solid var(--line);cursor:pointer}
 .ititle a:hover{border-color:var(--ink)}
@@ -211,6 +211,8 @@ dialog::backdrop{background:rgba(10,14,12,.45)}
 
 /* Techniques */
 .techs{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.stack{display:flex;flex-direction:column;gap:10px}
+[hidden]{display:none!important}
 .links{display:flex;gap:10px;flex-wrap:wrap;font-size:13px}
 .links a{color:var(--accent)}
 </style>
@@ -243,7 +245,7 @@ const BLOCKS=[
   {k:'weak',l:'Skill focus',share:.20,min:8},
   {k:'maint',l:'Maintenance',share:.10,min:5},
   {k:'harvest',l:'Idea harvest',share:.10,min:5}];
-const BLOCK_L=Object.fromEntries(BLOCKS.map(b=>[b.k,b.l]));
+const BLOCK_L={...Object.fromEntries(BLOCKS.map(b=>[b.k,b.l])),free:'Free practice'};
 const DROP_ORDER=['harvest','maint','warmup','stretch','weak','polish'];
 const SKILL_CUES={
   rhythm:'keep the strumming hand moving evenly and lock to the click',
@@ -381,7 +383,7 @@ function todayDone(excludeId){
   for(const ses of allSessions()){if(ses.date!==today()||ses.id===excludeId)continue;
     let any=false;
     for(const it of ses.items||[]){const m=itemMins(it);if(!m)continue;any=true;blocks[it.block]=(blocks[it.block]||0)+m;total+=m;if(it.refId&&it.kind!=='prompt')refs.add(it.refId)}
-    if(any)count++}
+    if(any&&!ses.manual)count++}
   return {blocks,total,refs,count};
 }
 // Plan this session so that the whole day stays balanced
@@ -522,18 +524,79 @@ function clockText(it){const left=it.minutes*60-it.elapsedSec;return left>=0?fmt
 let actx=null;
 function chime(){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();[660,880].forEach((f,i)=>{const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=f;o.type='sine';g.gain.setValueAtTime(.0001,actx.currentTime+i*.18);g.gain.exponentialRampToValueAtTime(.2,actx.currentTime+i*.18+.02);g.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+i*.18+.5);o.connect(g).connect(actx.destination);o.start(actx.currentTime+i*.18);o.stop(actx.currentTime+i*.18+.55)})}catch(e){}}
 
+// Update a song's or drill's history after it was practised on date d (today, or an earlier day when logged by hand)
+function applyPractice(it,d){
+  const later=(a,b)=>!a||b>a;
+  if(it.kind==='song'&&it.refId){
+    const s=S.songs.find(x=>x.id===it.refId);if(!s)return;const patch={};
+    if(later(s.lastPracticed,d)||s.lastPracticed===d)patch.lastPracticed=d;
+    if(it.bpm){const hist=[...(s.bpmHistory||[]).filter(h=>h.d!==d),{d,bpm:it.bpm}].sort((a,b)=>a.d.localeCompare(b.d));patch.bpmHistory=hist;if(hist[hist.length-1].d===d)patch.currentBpm=it.bpm}
+    if((it.block==='maint'||s.stage==='maintenance')&&(later(s.lastReview,d)||s.lastReview===d)){patch.lastReview=d;patch.reviewInterval=(it.clean||0)>=4?Math.min((s.reviewInterval||2)*2,30):2}
+    if(Object.keys(patch).length)patchSong(s.id,patch);
+  } else if(it.kind==='drill'&&it.refId){const dr=S.drills.find(x=>x.id===it.refId);if(dr&&(later(dr.lastDone,d)||dr.lastDone===d))patchDrill(it.refId,{lastDone:d})}
+}
+
+/* ---------- log practice done outside a planned session ---------- */
+function blockFor(kind,ref){
+  if(kind==='song'&&ref)return ref.stage==='learning'?'stretch':ref.stage==='maintenance'?'maint':'polish';
+  if(kind==='drill'&&ref)return ref.warmup?'warmup':'weak';
+  return 'free';
+}
+function logPractice(f){
+  const ref=f.kind==='song'?S.songs.find(x=>x.id===f.refId):f.kind==='drill'?S.drills.find(x=>x.id===f.refId):null;
+  const mins=Math.max(1,Math.min(600,Math.round(+f.minutes||0)));const date=f.date&&f.date<=today()?f.date:today();
+  const it={key:'log0',kind:ref?f.kind:'prompt',refId:ref?ref.id:null,title:ref?ref.title:(f.title||'Free practice').slice(0,80),sub:'Logged',
+    skills:ref?(ref.skills||[]):(f.skills||[]),task:'',block:blockFor(f.kind,ref),minutes:mins,actualMinutes:mins,done:true,elapsedSec:0,
+    bpm:f.bpm?Math.max(20,Math.min(320,Math.round(+f.bpm))):null,clean:f.clean?+f.clean:null,note:(f.note||'').slice(0,4000),part:(f.part||'').slice(0,60),hasBpm:false,manual:true};
+  const now=new Date();const id=date+'-log-'+now.getTime().toString(36);
+  const ses={date,startedAt:date===today()?now.toISOString():date+'T12:00:00',finishedAt:now.toISOString(),plannedMinutes:mins,status:'done',manual:true,items:[it]};
+  S.sessions=[{id,...ses},...S.sessions];save('sessions/'+id,ses);
+  applyPractice(it,date);
+  if(it.refId&&it.note.trim()){const nid=id+'_log0';const doc={refId:it.refId,kind:it.kind,title:it.title,block:it.block,part:it.part.trim(),text:it.note.trim(),bpm:it.bpm,clean:it.clean,date,sessionId:id,createdAt:now.toISOString()};S.notes=[{id:nid,...doc},...S.notes];save('notes/'+nid,doc)}
+  return id;
+}
+function deleteLog(id){
+  S.sessions=S.sessions.filter(s=>s.id!==id);del('sessions/'+id);
+  const nid=id+'_log0';if(S.notes.some(n=>n.id===nid)){S.notes=S.notes.filter(n=>n.id!==nid);del('notes/'+nid)}
+}
+function openLogPractice(){
+  const dlg=$('#dlg');dlg.dataset.id='';dlg.dataset.kind='log';S.confirmDel=null;
+  const songs=S.songs.filter(s=>!s.archived).sort((a,b)=>a.title.localeCompare(b.title));const drills=S.drills.filter(d=>d.status!=='library'&&d.status!=='skipped').sort((a,b)=>a.title.localeCompare(b.title));
+  const recent=S.sessions.filter(s=>s.manual).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.startedAt||'').localeCompare(a.startedAt||'')).slice(0,8);
+  dlg.innerHTML=`<form class="dlg" id="logform"><div class="row" style="justify-content:space-between"><h2>Log practice</h2><button type="button" class="btn ghost" data-dact="close">Close</button></div>
+    <p class="muted" style="margin:0;font-size:14px">For practice outside a Fretwork plan. It counts toward your daily minutes, skill balance, streak and the song's history.</p>
+    <div class="fields">
+      <label class="f">What did you play?<select id="lp-what" required><option value="">Choose…</option><optgroup label="Songs">${songs.map(s=>`<option value="song:${esc(s.id)}">${esc(s.title)}</option>`).join('')}</optgroup><optgroup label="Drills">${drills.map(d=>`<option value="drill:${esc(d.id)}">${esc(d.title)}</option>`).join('')}</optgroup><option value="other:">Something else…</option></select></label>
+      <label class="f">Minutes<input id="lp-min" type="number" min="1" max="600" inputmode="numeric" required placeholder="15"></label>
+      <label class="f">Day<input id="lp-date" type="date" value="${today()}" max="${today()}"></label>
+      <div class="row" style="gap:12px"><label class="f" style="flex:1">Clean BPM <span style="font-size:12px">(optional)</span><input id="lp-bpm" type="number" min="30" max="300" inputmode="numeric"></label>
+      <label class="f" style="flex:1">How clean<select id="lp-clean"><option value="">–</option>${[1,2,3,4,5].map(n=>`<option>${n}</option>`).join('')}</select></label></div>
+    </div>
+    <div id="lp-other" class="stack" hidden><label class="f">What was it?<input id="lp-title" placeholder="e.g. Jamming over a blues, learning a new riff"></label>
+      <div><div class="eyebrow" style="margin-bottom:6px">Skills it worked</div><div class="skilltoggles" id="lp-skills">${S.skills.map(k=>`<button type="button" data-id="${esc(k.id)}" aria-pressed="false">${esc(k.name)}</button>`).join('')}</div></div></div>
+    <div class="lognew" style="grid-template-columns:140px minmax(0,1fr)"><input id="lp-part" placeholder="Part (optional)" aria-label="Which part"><textarea id="lp-note" placeholder="Note (optional): how it went, what to work on next" aria-label="Note"></textarea></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn primary" type="submit">Log it</button></div>
+    ${recent.length?`<div><h3>Recently logged</h3><div class="log" style="margin-top:6px">${recent.map(s=>{const i=(s.items||[])[0]||{};return `<div class="logent"><div class="meta"><span class="mono">${esc(s.date)}</span><span class="mono">${itemMins(i)}m</span>${i.bpm?`<span class="mono">${i.bpm} BPM</span>`:''}<button type="button" class="btn ghost small" style="padding:0 6px;font-size:12px" data-dact="dellog" data-id="${esc(s.id)}">Delete</button></div><div class="txt">${esc(i.title||'')}</div></div>`}).join('')}</div></div>`:''}
+  </form>`;
+  const other=$('#lp-other');
+  $('#lp-what').addEventListener('change',e=>{other.hidden=!e.target.value.startsWith('other:')});
+  $('#lp-skills').addEventListener('click',e=>{const b=e.target.closest('button');if(b)b.setAttribute('aria-pressed',String(b.getAttribute('aria-pressed')!=='true'))});
+  $('#logform').addEventListener('submit',e=>{e.preventDefault();
+    const w=$('#lp-what').value;if(!w){toast('Choose what you played');return}
+    const m=+$('#lp-min').value;if(!(m>=1)){toast('Enter the minutes');return}
+    const kind=w.slice(0,w.indexOf(':'));const refId=w.slice(w.indexOf(':')+1);
+    if(kind==='other'&&!$('#lp-title').value.trim()){toast('Say what you practised');return}
+    logPractice({kind,refId,minutes:m,date:$('#lp-date').value,bpm:$('#lp-bpm').value,clean:$('#lp-clean').value,part:$('#lp-part').value,note:$('#lp-note').value,
+      title:$('#lp-title').value.trim(),skills:[...document.querySelectorAll('#lp-skills [aria-pressed="true"]')].map(b=>b.dataset.id)});
+    try{dlg.close()}catch(err){dlg.removeAttribute('open')}toast(`Logged ${m} minutes`);render()});
+  try{dlg.showModal()}catch(e){dlg.setAttribute('open','')}
+}
+
 function completeItem(k){
   const it=findItem(k);if(!it)return;
   if(S.running===k)stopTimer();
   if(it.actualMinutes==null)it.actualMinutes=it.elapsedSec>60?Math.round(it.elapsedSec/60):it.minutes;
-  it.done=true;const d=today();
-  if(it.kind==='song'&&it.refId){
-    const s=S.songs.find(x=>x.id===it.refId);
-    if(s){const patch={lastPracticed:d};
-      if(it.bpm){patch.currentBpm=it.bpm;patch.bpmHistory=[...(s.bpmHistory||[]).filter(h=>h.d!==d),{d,bpm:it.bpm}]}
-      if(it.block==='maint'||s.stage==='maintenance'){patch.lastReview=d;patch.reviewInterval=(it.clean||0)>=4?Math.min((s.reviewInterval||2)*2,30):2}
-      patchSong(s.id,patch)}
-  } else if(it.kind==='drill'&&it.refId){patchDrill(it.refId,{lastDone:d})}
+  it.done=true;applyPractice(it,today());
   syncNote(it);S.noteOpen.delete(k);if(S.swapKey===k)S.swapKey=null;
   saveSession(true);render();
 }
@@ -724,6 +787,7 @@ function viewToday(){
     <div class="panel glance">
       <div class="eyebrow">At a glance</div>
       <div class="kv"><span>Today so far</span><span class="mono">${fmtMin(todayMin)} / ${goal}m</span></div>
+      <div class="row" style="justify-content:space-between;gap:8px"><span class="muted" style="font-size:13px">Played without a plan?</span><button class="btn small" data-act="logpractice">+ Log practice</button></div>
       <div class="kv"><span>Streak</span><span class="mono">${streak()} day${streak()===1?'':'s'}</span></div>
       <div class="kv"><span>Songs in Learning</span><span class="mono">${learning}</span></div>
       <div><div class="muted" style="font-size:13px;margin-bottom:6px">Skills getting the least time (28 days)</div>
@@ -874,7 +938,7 @@ function viewProgress(){
   const withBpm=S.songs.filter(s=>(s.bpmHistory||[]).length);
   if(!S.bpmSong||!withBpm.some(s=>s.id===S.bpmSong))S.bpmSong=withBpm[0]?.id||null;
   return `<section class="view">${offlineBanner()}
-  <h1>Progress</h1>
+  <div class="row" style="justify-content:space-between"><h1>Progress</h1><button class="btn" data-act="logpractice">+ Log practice</button></div>
   <div class="kpis">
     <div class="kpi"><span>This week</span><b>${fmtMin(week)}</b><span>goal ${fmtMin(goal*7)}</span></div>
     <div class="kpi"><span>Streak</span><b>${streak()}</b><span>days in a row</span></div>
@@ -1019,6 +1083,8 @@ $('#dlg').addEventListener('click',e=>{
   else if(b.dataset.dact==='delnote'){const nid=b.dataset.id;if(S.confirmDel!==nid){S.confirmDel=nid;b.textContent='Delete for good?';return}
     S.notes=S.notes.filter(n=>n.id!==nid);del('notes/'+nid);S.confirmDel=null;refreshLog()}
   else if(b.dataset.dact==='techstart'){startTech(id);openDrill(id)}
+  else if(b.dataset.dact==='dellog'){const lid=b.dataset.id;if(S.confirmDel!==lid){S.confirmDel=lid;b.textContent='Delete for good?';return}
+    deleteLog(lid);S.confirmDel=null;toast('Log deleted');openLogPractice()}
   else if(b.dataset.dact==='retire'){patchDrill(id,{status:'retired'});closeDlg();toast('Taken out of rotation. Its log is kept.')}
   else if(b.dataset.dact==='skill'&&s){const on=b.getAttribute('aria-pressed')==='true';const sk=new Set(s.skills||[]);on?sk.delete(b.dataset.id):sk.add(b.dataset.id);b.setAttribute('aria-pressed',String(!on));patchSong(id,{skills:[...sk]})}
   else if(b.dataset.dact==='delete'&&s){
@@ -1068,6 +1134,7 @@ $('#main').addEventListener('click',e=>{
       s.status='added';save('suggestions/'+s.id,{status:'added',songId:id},'update');toast(s.title+' added to Learning');render();break}
     case 'dismiss':{const s=S.suggestions.find(x=>x.id===b.dataset.id);if(!s)break;s.status='dismissed';save('suggestions/'+s.id,{status:'dismissed'},'update');render();break}
     case 'opendrill':if(b.dataset.id)openDrill(b.dataset.id);break;
+    case 'logpractice':openLogPractice();break;
     case 'noteopen':S.noteOpen.add(b.dataset.k);render();{const el=document.getElementById('note-'+b.dataset.k);if(el)el.focus()}break;
     case 'swap':S.swapKey=S.swapKey===b.dataset.k?null:b.dataset.k;render();break;
     case 'remove':removeItem(b.dataset.k);break;
