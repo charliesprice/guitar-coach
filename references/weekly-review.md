@@ -9,6 +9,7 @@ Run when the user asks for a review (or weekly if scheduled).
    - Per song: minutes this week, BPM change (first vs last `bpmHistory` entry this week), weeks in current stage.
    - Repetition check: share of time on the top 3 songs. Over ~50% → flag it.
    - Learning column size. Under 2 → material warning.
+   - Don't flag items that ran past their planned minutes. The user does that on purpose when they want more time on something. Count actual minutes, and mention long stays only as "what you leaned into this week".
 3. Write the review as a short report:
    - **The week in one line.**
    - **What moved** (BPM gains, stage moves the user made).

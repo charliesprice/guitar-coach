@@ -26,6 +26,7 @@ Read the `config/profile` document first every time; it is the source of truth a
 - Lessons 3x/month, all recorded with transcripts.
 - Main goal: **write their own songs at a high level.** Learning songs puts ideas in their hands. Being able to *record* clean parts into Logic is a key transferable skill.
 - Mostly on a laptop.
+- Planned minutes are a guide, not a limit. The user often stays on an item longer on purpose because they want more time on it. Don't treat running over as a problem. Use the actual minutes for balance, and treat long stays as a sign of what they're into right now.
 
 ## Core rules (apply to everything you do)
 
